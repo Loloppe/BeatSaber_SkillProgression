@@ -118,7 +118,7 @@ namespace SkillProgression.Core.Progression
         /// <param name="level">Difficulty slider position 0 centres on (D-047: Training's, see
         /// <see cref="TrainingLevel"/>); null = the player's own level on the style.</param>
         public static ExploreResult Suggest(string path, ExploreMode mode, int offset, IReadOnlyList<RatedPlay> bestPlays,
-            ModelFile model, MapCatalog catalog, int seed, int count = DefaultCount, double? level = null)
+            ModelFile model, MapCatalog catalog, int seed, int count = DefaultCount, double? level = null, bool randomPick = true)
         {
             var ctx = Prepare(path, mode, bestPlays, model, catalog, level);
             var center = Center(ctx, offset);
@@ -135,7 +135,8 @@ namespace SkillProgression.Core.Progression
             var ranked = candidates.OrderByDescending(c => c.rank).Select(c => c.item).ToList();
             return new ExploreResult
             {
-                Items = Pick(ranked, count, new Random(seed)),
+                // randomPick false: the top candidates in rank order (Solo "To improve" tab, D-049).
+                Items = randomPick ? Pick(ranked, count, new Random(seed)) : ranked.Take(count).ToList(),
                 RangeLow = Math.Max(ctx.AxisMin, center - half),
                 RangeHigh = Math.Min(ctx.AxisMax, center + half),
                 Widened = widened,

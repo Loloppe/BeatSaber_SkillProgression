@@ -177,6 +177,20 @@ public class ExplorerTests
         Assert.InRange(Centre(1), 8.3, 8.4);    // + one step (0.35)
     }
 
+    [Fact]
+    public void Without_random_pick_the_list_is_the_top_candidates_in_rank_order()
+    {
+        var weakest = Enumerable.Range(0, 12).Select(i => (Map(10, 9.0, 4, "speed", predictedAcc: 0.95), 0.90 + 0.003 * i)).ToList();
+        var plays = Enumerable.Range(0, 10).Select(_ => (Map(10, 9.0, 4, "speed", predictedAcc: 0.95), 0.94)).Concat(weakest).ToList();
+        var (model, catalog, best) = Setup(plays, Array.Empty<MapEntry>());
+
+        var a = Explorer.Suggest("Speed", ExploreMode.Improve, 0, best, model, catalog, seed: 1, count: 4, randomPick: false).Items;
+        var b = Explorer.Suggest("Speed", ExploreMode.Improve, 0, best, model, catalog, seed: 2, count: 4, randomPick: false).Items;
+
+        Assert.Equal(a.Select(i => i.Map), b.Select(i => i.Map));       // seed doesn't matter
+        Assert.Equal(weakest.Take(4).Select(w => w.Item1.Hash), a.Select(i => i.Map.Hash)); // biggest expected gain first
+    }
+
     private static MapEntry CuratedOnly(MapEntry map, double score)
     {
         map.RankedBeatLeader = false;

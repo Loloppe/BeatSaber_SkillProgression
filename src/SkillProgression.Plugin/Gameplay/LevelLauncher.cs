@@ -174,7 +174,7 @@ internal class LevelLauncher
         UnityAsyncHelper.InvokeSafe(_playerDataModel.SaveAsync);
     }
 
-    private static IReadOnlyList<string> ModifierCodes(GameplayModifiers m)
+    internal static IReadOnlyList<string> ModifierCodes(GameplayModifiers m)
     {
         var codes = new List<string>();
         if (m.songSpeed == GameplayModifiers.SongSpeed.Faster) codes.Add("FS");

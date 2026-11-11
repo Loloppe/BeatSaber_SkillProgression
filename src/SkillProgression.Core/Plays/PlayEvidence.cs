@@ -10,6 +10,8 @@ namespace SkillProgression.Core.Plays
         BeatLeader,
         /// <summary>A play recorded by the plugin itself (D-011).</summary>
         LocalPlayLog,
+        /// <summary>A clear made from the game's Solo menu, kept as a score only until BeatLeader syncs it (D-049).</summary>
+        LocalSolo,
     }
 
     /// <summary>One cleared play used as evidence of skill, whatever its source.</summary>

@@ -58,6 +58,8 @@ internal sealed class ProgressionService
     private readonly PlayLogStore _playLog;
     private readonly UserStateStore _stateStore;
     private readonly ScoreCache _scoreCache;
+    /// <summary>Clears made from the game's Solo menu, scores only (D-049).</summary>
+    private readonly SoloScoreStore _soloScores;
     /// <summary>Unranked PBs, for Explore's Curated pool only (D-045); synced once per session on first use.</summary>
     private readonly ScoreCache _unrankedCache;
     private Task<IReadOnlyList<PlayEvidence>>? _unrankedScores;
@@ -80,6 +82,7 @@ internal sealed class ProgressionService
         _platforms = platforms;
         _stateStore = new UserStateStore(Path.Combine(dataDir, "state.json"));
         _scoreCache = new ScoreCache(Path.Combine(dataDir, "beatleader-scores.json"));
+        _soloScores = new SoloScoreStore(Path.Combine(dataDir, "solo-scores.json"));
         _unrankedCache = new ScoreCache(Path.Combine(dataDir, "beatleader-unranked-scores.json"), ScoreType.Unranked);
         _progress = new ProgressStore(Path.Combine(dataDir, "progress.json"));
         State = _stateStore.Load();
@@ -268,6 +271,7 @@ internal sealed class ProgressionService
     private DateTime? Since => State.StartMode == StartMode.Fresh ? State.FreshStartUtc : null;
 
     private List<PlayEvidence> Evidence(IReadOnlyList<PlayRecord> log) => _beatLeaderScores
+        .Concat(_soloScores.All())
         .Concat(log.Where(p => p.IsPass() && !p.Practice).Select(ToEvidence))
         .ToList();
 
@@ -284,7 +288,43 @@ internal sealed class ProgressionService
     /// Explore's own choice: a ranked pool (shared with Training) or Curated (D-045, adds unranked BeatLeader PBs).
     /// </summary>
     public async Task<(ExploreResult result, int[] counts)> ExploreAsync(string path, ExploreMode mode, int offset, int seed,
-        MapPool pool, CancellationToken ct = default)
+        MapPool pool, CancellationToken ct = default) =>
+        await ExploreCoreAsync(path, mode, offset, seed, pool, Explorer.DefaultCount, randomPick: true, ct);
+
+    /// <summary>A clear from the Solo menu (D-049): kept as a score only, used as evidence until BeatLeader has it.</summary>
+    public void AddSoloScore(PlayEvidence play) => _soloScores.Add(play);
+
+    /// <summary>Saves the Explore settings (mode, style, pool, slider) the Solo tab is rebuilt from (D-049).</summary>
+    public void SetToImprove(ExploreMode mode, string path, MapPool pool, int offset)
+    {
+        State.ToImprove = new ToImproveSettings { Mode = mode, Path = path, Pool = pool, Offset = offset };
+        SaveState();
+    }
+
+    /// <summary>
+    /// The Solo tab (D-049): Explore's list for the saved mode and settings, top candidates in order (no
+    /// shuffle, so it only changes when scores do). Empty until settings were saved from Explore.
+    /// </summary>
+    public async Task<IReadOnlyList<ExploreItem>> ToImproveAsync(int count = Explorer.DefaultCount, CancellationToken ct = default)
+    {
+        if (State.ToImprove is not { } s || string.IsNullOrEmpty(s.Path)) return Array.Empty<ExploreItem>();
+        var (result, _) = await ExploreCoreAsync(s.Path, s.Mode, s.Offset, 0, s.Pool, count, randomPick: false, ct);
+        return result.Items;
+    }
+
+    /// <summary>Explore lists and "To improve" rebuilds share the Explore catalog's pool setting: one at a time.</summary>
+    private readonly SemaphoreSlim _exploreLock = new(1, 1);
+
+    private async Task<(ExploreResult result, int[] counts)> ExploreCoreAsync(string path, ExploreMode mode, int offset, int seed,
+        MapPool pool, int count, bool randomPick, CancellationToken ct)
+    {
+        await _exploreLock.WaitAsync(ct);
+        try { return await ExploreLockedAsync(path, mode, offset, seed, pool, count, randomPick, ct); }
+        finally { _exploreLock.Release(); }
+    }
+
+    private async Task<(ExploreResult result, int[] counts)> ExploreLockedAsync(string path, ExploreMode mode, int offset, int seed,
+        MapPool pool, int count, bool randomPick, CancellationToken ct)
     {
         await EnsureEngineAsync(ct);
         _engine!.Catalog.Pool = State.MapPool; // Training's pool, for Training's level below
@@ -306,7 +346,7 @@ internal sealed class ProgressionService
             var rated = ranked.Concat(unranked.Where(e => Since == null || e.TimeUtc >= Since.Value))
                 .Select(catalog.Rate).Where(r => r != null).Select(r => r!).ToList();
             var best = ProfileBuilder.BestPerMap(rated);
-            return (Explorer.Suggest(path, mode, offset, best, _model!, catalog, seed, level: level),
+            return (Explorer.Suggest(path, mode, offset, best, _model!, catalog, seed, count, level, randomPick),
                     Explorer.Counts(path, mode, best, _model!, catalog, level));
         }, ct);
     }
@@ -325,6 +365,9 @@ internal sealed class ProgressionService
         var status = Calibrator.Status(oldLevel, State.CalibrationPicks(path), log);
         return status.Done ? status.Estimate : status.Level;
     }
+
+    /// <summary>The next Curated Explore list resyncs unranked PBs (the plugin was reopened, user 2026-11-11).</summary>
+    public void ResyncUnrankedOnNextUse() => _unrankedScores = null;
 
     /// <summary>Unranked BeatLeader PBs (synced, falling back to the cache; none without BeatLeader import).</summary>
     private async Task<IReadOnlyList<PlayEvidence>> LoadUnrankedScoresAsync()

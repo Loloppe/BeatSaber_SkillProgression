@@ -10,6 +10,7 @@ using SkillProgression.Core.Profiles;
 using SkillProgression.Core.Progression;
 using SkillProgression.Plugin.Gameplay;
 using SkillProgression.Plugin.Services;
+using SkillProgression.Plugin.Solo;
 using SkillProgression.Plugin.UI;
 using Zenject;
 
@@ -24,6 +25,10 @@ internal class ExploreViewController : ViewController
     [Inject] private readonly ProgressionService _service = null!;
     [Inject] private readonly LevelLauncher _launcher = null!;
     [Inject] private readonly MapDownloader _downloader = null!;
+    [Inject] private readonly ToImproveTab _toImprove = null!;
+
+    /// <summary>Asks the flow to open the Solo menu on the "To improve" tab with this level selected (D-049).</summary>
+    public Action<BeatmapLevelPack, BeatmapLevel, BeatmapKey>? SoloRequested { get; set; }
 
     private ExploreView? _view;
     private List<ExploreItem> _items = new();
@@ -38,7 +43,7 @@ internal class ExploreViewController : ViewController
         {
             _view = new ExploreView
             {
-                OnChanged = () => _ = LoadAsync(), OnNewList = NewList, OnPlay = Play,
+                OnChanged = () => _ = LoadAsync(), OnNewList = NewList, OnPlay = Play, OnOpenInSolo = OpenInSolo,
                 OnPoolChanged = pool =>
                 {
                     _curated = pool == MapPool.Curated;
@@ -94,6 +99,52 @@ internal class ExploreViewController : ViewController
         finally
         {
             if (request == _requestId) _view.Working.Value = false;
+        }
+    }
+
+    /// <summary>
+    /// D-049: saves these settings (Improve a score or Never played) as the source of the Solo tab, downloads its missing
+    /// maps, rebuilds the tab and opens Solo on it with the first map selected.
+    /// </summary>
+    private async void OpenInSolo()
+    {
+        if (_view == null) return;
+        try
+        {
+            _view.Busy.Value = true;
+            _view.Working.Value = true;
+            _view.Status.Value = "Preparing the Solo tab";
+            _service.SetToImprove(_view.Mode.Value, _view.Style.Value, _view.Pool.Value, _view.Offset.Value);
+            var items = await _service.ToImproveAsync();
+            foreach (var item in items.Where(i => !MapDownloader.IsDownloaded(i.Map.Hash)))
+            {
+                _view.Status.Value = $"Downloading {item.Name}";
+                await _downloader.DownloadAsync(item.Map.Hash);
+            }
+            await _toImprove.RebuildAsync();
+            var first = items.Select(i => (item: i, level: SongCore.Loader.GetLevelByHash(i.Map.Hash))).FirstOrDefault(x => x.level != null);
+            var pack = _toImprove.Pack;
+            if (pack == null || first.level == null)
+            {
+                _view.Status.Value = _view.Mode.Value == ExploreMode.Improve
+                    ? "No scores to improve here - try another difficulty." : "No new maps here - try another difficulty.";
+                return;
+            }
+            var key = first.level.GetBeatmapKeys().FirstOrDefault(k =>
+                string.Equals(k.beatmapCharacteristic.serializedName, first.item.Map.Characteristic, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(k.difficulty.ToString(), first.item.Map.Difficulty, StringComparison.OrdinalIgnoreCase));
+            _view.Status.Value = "";
+            SoloRequested?.Invoke(pack, first.level, key);
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Error(e);
+            _view.Status.Value = "Could not open the Solo tab. See the log for details.";
+        }
+        finally
+        {
+            _view.Working.Value = false;
+            _view.Busy.Value = false;
         }
     }
 

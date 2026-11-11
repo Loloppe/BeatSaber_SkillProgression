@@ -338,6 +338,27 @@ Format: ID — date — decision — rationale. Open questions listed below with
   control, so all five look disabled with Accuracy selected). With AccSaber, every AccSaber map is an Accuracy map for
   **recommendations** (Next up, starters, calibration, Explore) via `PathRules.IsRecommendable` — 4 of ~600 have a pass
   rating above the Accuracy limit. Progress is still measured with the style rules (`IsRelevant`), pool-independent.
+- **D-049 — 2026-11-11 — Solo menu "To improve" tab (user, from a player suggestion; option A over a playlist).**
+  Revisits D-006 / Q-008 as an **optional extra path**: direct start from the plugin stays. Explore's Improve mode has
+  "Open in Solo": it saves its settings (style, pool incl. Curated, slider position) in state.json `ToImprove`, downloads
+  the list's missing maps and opens the game's Solo menu on a new level category tab (after Favorites / All, icon
+  `Resources/to-improve.png`) holding a pack of Explore's Improve list for those settings (top candidates in order, no
+  shuffle), first map selected (the game ignores the difficulty in the start state). The tab is Solo-only, shown once
+  the list has downloaded maps, and **rebuilt after every Solo play** (after the results screen). **Solo plays = scores
+  only** (user): cleared, non-practice, non-No-Fail Solo plays go to `solo-scores.json` (best accuracy per map,
+  `EvidenceSource.LocalSolo`), used as evidence like BeatLeader PBs; never in the play log (steps, 3-miss rule,
+  calibration, achievements unchanged). **Resync on open** (user): opening the plugin from the main menu resyncs
+  BeatLeader (incremental) and the next Curated list resyncs unranked PBs. Implementation: SiraUtil Affinity patches
+  (menu-scoped), see TECH_FINDINGS. Known risks: game updates changing these methods; BetterSongList's saved category is
+  reset to "All" when our tab is selected so removing the mod can't crash Solo. Same day (user): the button also works
+  in **Never played**; the tab follows the mode Explore showed (label/pack "To improve" or "Never played", saved as
+  `ToImprove.Mode`). Never played maps are downloaded when the button is pressed, not after plays (a SongCore refresh in
+  the Solo menu could reset it), so that list shrinks as maps get played until the button is pressed again.
+  In-game fixes (user, same day): after a Solo play the list's missing maps **are** downloaded (SongCore's refresh keeps
+  the selected tab, verified in its source) and the tab re-shows; tab row widened so the 5th tab is clickable; the list
+  is shown like Favorites (no pack cover / header / "Buy" panel, order kept). Difficulty (user choice: auto-select
+  only): songs from our tab open on the recommended difficulty/characteristic (prefix on StandardLevelDetailView.SetContent
+  swapping the last-used defaults; the saved last-used difficulty is untouched); the list rows are unchanged.
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are

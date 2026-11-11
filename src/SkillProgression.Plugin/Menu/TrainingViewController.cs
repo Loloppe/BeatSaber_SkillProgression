@@ -34,6 +34,16 @@ internal class TrainingViewController : ViewController
     private StartMode _pendingStartMode;
     private bool _synced;
 
+    /// <summary>
+    /// The next load syncs with BeatLeader (incremental: scores since the last sync). Called each time the plugin is
+    /// opened from the main menu; coming back from Explore / Achievements inside the plugin doesn't resync.
+    /// </summary>
+    public void SyncOnNextLoad()
+    {
+        _synced = false;
+        _service.ResyncUnrankedOnNextUse();
+    }
+
     public override void DidActivate(bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)
     {
         if (firstActivation)

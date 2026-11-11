@@ -67,9 +67,18 @@ internal static class Format
             $"{Axis(path)} {i.AxisRating:F2}<pos=20%>expected {i.ExpectedAccuracy:P1}{best}", downloaded ? "Play" : "Get & Play");
     }
 
+    /// <summary>Longest mapper / song name in a map title; longer ones end in "…" so difficulty and stars stay visible.</summary>
+    public const int MaxMapperLength = 16, MaxSongLength = 26;
+
     /// <summary>Map title with mapper, difficulty and star rating, e.g. "Mapper - Song [Ex+]  9.47★" (no mapper: "Song …").</summary>
     private static string Title(string mapper, string name, string difficulty, double stars) =>
-        $"{(string.IsNullOrWhiteSpace(mapper) ? "" : mapper + " - ")}{name} [{Short(difficulty)}]  {stars:F2}★";
+        $"{(string.IsNullOrWhiteSpace(mapper) ? "" : Clip(mapper, MaxMapperLength) + " - ")}{Clip(name, MaxSongLength)} [{Short(difficulty)}]  {stars:F2}★";
+
+    private static string Clip(string text, int max)
+    {
+        text = text.Trim();
+        return text.Length <= max ? text : text.Substring(0, max - 1).TrimEnd() + "…";
+    }
 
     /// <summary>D-032 B: how many maps each slider position offers; the current one highlighted.</summary>
     public static string ExploreCounts(int[] counts, int offset, ExploreMode mode)

@@ -85,4 +85,6 @@ Outstanding / known gaps:
   Mapper names in map rows; Explore centred on Training's difficulty (D-047) — awaiting in-game test.
   Version 1.0.0: a Release build now writes the complete zip (bin/Release/net48/zip: Plugins/ dll+pdb + UserData
   model, via the CopyModelToArtifact target before BSMT's zip step); not published — still gated on public Reactive v2 + matching BeatLeader build (D-043).
+  Clipped long titles; resync on plugin open; Solo tab for Explore lists (Improve / Never played) with Solo plays as
+  scores, after-play downloads and recommended-difficulty preselect (D-049) — verified in-game by the user 2026-11-11.
 - ~~SS/AccSaber map pools (D-023)~~ — done 2026-11-10 (D-041). Postponed: unranked maps in Explore (D-032, D-043: catalogue-wide BL fetch too long). ~~adaptive step sizes~~ done 2026-11-10 (D-042).

@@ -107,6 +107,39 @@ v2research\`.
 - **Smoke test 2026-11-10 (user, FPFC):** game loads; BSIPA reports Reactive 2.0.0 + BeatLeader 0.10.0; BeatLeader UI
   works. Only notable exception (`HMUI.CurvedCanvasSettings.Start` NRE) is pre-existing (present in every 2026-11-08
   log with Reactive 1.0.0). Warnings "developed for 1.42.0" for Reactive/Yoga are expected. **Score submission not yet tested.**
+- **Custom level category tab (D-049, verified in 1.40.8 decompiled code, 2026-11-11):**
+  - Tabs: `SelectLevelCategoryViewController._allLevelCategoryInfos` (prefab-serialized `LevelCategoryInfo{levelCategory,
+    localizedKey, categoryIcon}`), filtered by `Setup(selected, enabledLevelCategories)` → IconSegmentedControl
+    (`SegmentedControl.dll`). Enum: None 0, MusicPacks 1, CustomSongs 2, Favorites 3, All 4; ours = 5, appended last.
+  - Enabled list: `LevelFilteringNavigationController.SetupBeatmapLevelPacks` → `_enabledLevelCategories`; content:
+    `UpdateSecondChildControllerContent(levelCategory)` switch, `default: throw` → prefix shows our pack through
+    `ShowPacksInSecondChildController`. These controllers are shared by Solo/Multiplayer/Party/BeatLeader replays:
+    enable only when `LevelSelectionFlowCoordinator.DidActivate` runs for `SoloFreePlayFlowCoordinator`.
+  - Preselect: `SoloFreePlayFlowCoordinator.Setup(new LevelSelectionFlowCoordinator.State(category, pack, in key, level))`
+    then `GameObject.Find("SoloButton").GetComponent<NoTransitionsButton>().onClick` (BetterSongSearch); key is ignored.
+  - Solo results: `SoloFreePlayFlowCoordinator.ProcessLevelCompletionResultsAfterLevelDidFinish(results,
+    transformedBeatmapData, beatmapKey, beatmapLevel, modifiers, practice)` (Solo only; our own StartStandardLevel
+    launches don't reach it; SiraUtil sets `practice` when submission is disabled). Nothing refreshes our pack on return:
+    we re-run our category after `HandleResultsViewControllerContinueButtonPressed`.
+  - Layout: `LevelFilteringNavigationController` (an HMUI NavigationController) lays its child views side by side from
+    their `rect.width`; the category view's prefab width fits 4 tabs, so a 5th overflows under the next view (clicks
+    lost, overlaps the search bar) → widen the view by one cell (`SetSizeWithCurrentAnchors`) in the Setup postfix.
+    Hint: `IconSegmentedControlCell.hintText` setter (unknown localization keys return the key, with a log warning).
+  - Delivery: like Favorites, a *filtered* collection (`HandleLevelSearchViewControllerDidFilterBeatmapLevelCollection`
+    with `isFiltered = true, sortAlphabetically = false`) → no pack header / "Buy" panel (the buy check treats ids not
+    starting with `custom_levelpack_` as store packs unless `PackBuyOption.DisableBuyOption`), grid hidden via
+    `SetData(packs, 0, hideIfOneOrNoPacks: true)`, our order kept.
+  - Difficulty: `StandardLevelDetailViewController` (line ~302) calls `StandardLevelDetailView.SetContent(level, mask,
+    notAllowed, playerData.lastSelectedBeatmapDifficulty, playerData.lastSelectedBeatmapCharacteristic, playerData)`;
+    the two defaults pick the selected characteristic/difficulty → a prefix can swap them (ref params).
+  - **Pitfall (crashed the menu 2026-11-11):** an Affinity patch on an overloaded method without `argumentTypes` throws
+    AmbiguousMatchException, and SiraUtil's AffinityKernel then fails to start → the whole menu container breaks (other
+    mods' patches too, NullReferenceExceptions). `StandardLevelDetailView.SetContent` has 2 overloads; all other targets 1
+    (checked by reflection). Always pass the parameter types for overloaded targets.
+  - SongCore `RefreshSongs` → `RefreshLevelPacks` → replaced `UpdateCustomSongs` → `UpdateSecondChildControllerContent(
+    selected)`: the selected tab stays, levels are reloaded → build our pack from current SongCore levels at show time.
+  - Vanilla doesn't persist the category; BetterSongList does (`Config.LastCategory`, restored with Enum.TryParse) → reset
+    to "All" when ours is selected. Unknown localization keys avoided: hint text re-set in a Setup postfix.
 - **Compression libs (2026-11-11):** map downloads unzip with `ZipArchiveEntry.ExtractToFile`, from the BeatMods library
   mods System.IO.Compression (4.6.57) and System.IO.Compression.FileSystem (4.7.3056, depends on the former), installed
   to `Libs/`. SongCore references both but doesn't declare them in its manifest, so our manifest declares

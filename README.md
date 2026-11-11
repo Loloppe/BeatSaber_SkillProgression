@@ -29,6 +29,9 @@ what to play next** — based on how thousands of BeatLeader players actually pr
   accuracy. A slider starts at the difficulty Training works at for the style and goes down to half of it, or a few
   steps harder. Besides the ranked pools, Explore can use **BeatSaver's curated maps** (those
   BeatLeader rates; plays on them don't count toward progression).
+- **To improve tab in Solo** — from Explore's "Improve a score" or "Never played" list, *Open in Solo* opens the game's
+  Solo menu on a new tab (after Favorites and All) with those maps, so you see the leaderboard as usual. The tab updates
+  after every play; Solo clears count as scores right away, before BeatLeader syncs.
 - **Achievements & history** — milestones, completed steps, established styles, personal records, consistency,
   comebacks and BeatLeader / ScoreSaber / AccSaber rank and pp/AP thresholds, plus rank and milestone charts.
 - **Platforms panel** — live BeatLeader, ScoreSaber and AccSaber rank and pp/AP.

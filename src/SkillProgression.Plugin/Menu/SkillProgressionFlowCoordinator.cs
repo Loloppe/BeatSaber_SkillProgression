@@ -1,4 +1,7 @@
+using System.Linq;
 using HMUI;
+using SkillProgression.Plugin.Solo;
+using UnityEngine;
 using Zenject;
 
 namespace SkillProgression.Plugin.Menu;
@@ -28,10 +31,13 @@ internal class SkillProgressionFlowCoordinator : FlowCoordinator
             showBackButton = true;
             _trainingViewController.ExploreRequested = OpenExplore;
             _trainingViewController.AchievementsRequested = () => Open(_achievementsViewController, "Achievements");
+            _exploreViewController.SoloRequested = OpenSolo;
         }
 
         if (addedToHierarchy)
         {
+            // Opening the plugin from the main menu resyncs BeatLeader (scores set elsewhere, e.g. from Solo, user 2026-11-11).
+            _trainingViewController.SyncOnNextLoad();
             // Same setup as SoloFreePlayFlowCoordinator on 1.40.8; the panel saves changes to player data itself.
             _gameplaySetupViewController.Setup(
                 showModifiers: true, showEnvironmentOverrideSettings: true, showColorSchemesSettings: true,
@@ -42,6 +48,24 @@ internal class SkillProgressionFlowCoordinator : FlowCoordinator
     }
 
     private void OpenExplore() => Open(_exploreViewController, "Explore");
+
+    /// <summary>
+    /// D-049: leaves the plugin for the game's Solo menu on the "To improve" tab with a map selected (BetterSongSearch's
+    /// route on 1.40.8: SoloFreePlayFlowCoordinator.Setup(state), then the main menu's Solo button). The game ignores
+    /// the state's difficulty; the level is selected.
+    /// </summary>
+    private void OpenSolo(BeatmapLevelPack pack, BeatmapLevel level, BeatmapKey key)
+    {
+        var solo = Resources.FindObjectsOfTypeAll<SoloFreePlayFlowCoordinator>().FirstOrDefault();
+        if (solo == null)
+        {
+            Plugin.Log.Warn("Solo flow coordinator not found.");
+            return;
+        }
+        solo.Setup(new LevelSelectionFlowCoordinator.State(ToImproveTab.Category, pack, in key, level));
+        _parentFlowCoordinator.DismissFlowCoordinator(this, immediately: true,
+            finishedCallback: () => GameObject.Find("SoloButton")?.GetComponent<NoTransitionsButton>()?.onClick.Invoke());
+    }
 
     private void Open(ViewController viewController, string title)
     {

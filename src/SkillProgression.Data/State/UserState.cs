@@ -37,6 +37,19 @@ namespace SkillProgression.Data.State
         public DateTime PickedUtc { get; set; }
     }
 
+    /// <summary>
+    /// Explore settings the Solo menu's tab is rebuilt from after every play (D-049): Improve a score ("To improve") or
+    /// Never played, whichever Explore showed when "Open in Solo" was pressed.
+    /// </summary>
+    public sealed class ToImproveSettings
+    {
+        public ExploreMode Mode { get; set; } = ExploreMode.Improve;
+        public string Path { get; set; } = "";
+        public MapPool Pool { get; set; } = MapPool.AnyRanked;
+        /// <summary>Explore slider position (difficulty offset).</summary>
+        public int Offset { get; set; }
+    }
+
     /// <summary>The player's choices, persisted between sessions. Versioned for migrations.</summary>
     public sealed class UserState
     {
@@ -54,6 +67,8 @@ namespace SkillProgression.Data.State
         public List<string> Skipped { get; set; } = new List<string>();
         /// <summary>Fresh-start calibration per path (D-040); cleared when the start mode changes.</summary>
         public Dictionary<string, CalibrationState> Calibrations { get; set; } = new Dictionary<string, CalibrationState>();
+        /// <summary>Solo "To improve" tab source (D-049); null until set from Explore.</summary>
+        public ToImproveSettings? ToImprove { get; set; }
 
         public CalibrationState Calibration(string path)
         {

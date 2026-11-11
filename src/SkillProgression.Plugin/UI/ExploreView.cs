@@ -62,6 +62,8 @@ internal class ExploreView : ReactiveComponent
     public Action? OnChanged { get; set; }
     public Action<MapPool>? OnPoolChanged { get; set; }
     public Action? OnNewList { get; set; }
+    /// <summary>Fill the Solo menu's tab with this list (Improve or Never played) and open it (D-049).</summary>
+    public Action? OnOpenInSolo { get; set; }
     public Action<ExploreRow>? OnPlay { get; set; }
 
     protected override GameObject Construct()
@@ -117,6 +119,8 @@ internal class ExploreView : ReactiveComponent
                         },
                         new BsPrimaryTextButton { Text = "New list", FlexItem = { Size = new() { x = 20.pt, y = 5.5f.pt } },
                                                   sInteractable = Busy.Map(b => !b), OnClick = () => OnNewList?.Invoke() },
+                        new BsPrimaryTextButton { Text = "Open in Solo", FlexItem = { Size = new() { x = 24.pt, y = 5.5f.pt } },
+                                                  sInteractable = Busy.Map(b => !b), OnClick = () => OnOpenInSolo?.Invoke() },
                     }
                 },
                 new Label { sText = Counts, FontSize = 2.6f, Color = Dim, RichText = true },
