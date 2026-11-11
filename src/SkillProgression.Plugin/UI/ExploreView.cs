@@ -41,20 +41,15 @@ internal class ExploreView : ReactiveComponent
         [Destinations.Extreme] = new("Extreme", null),
     };
 
-    private static readonly Dictionary<RequirementFilter, BsDropdownItem> RequirementItems = new()
+    /// <summary>Training's pools plus Curated, which is Explore only (D-045).</summary>
+    private static readonly Dictionary<MapPool, BsDropdownItem> PoolItems = new(TrainingView.PoolItems)
     {
-        [RequirementFilter.None] = new("None", null),
-        [RequirementFilter.NoodleExtensions] = new("Noodle", null),
-        [RequirementFilter.MappingExtensions] = new("Mapping Ext.", null),
-        [RequirementFilter.Vivify] = new("Vivify", null),
-        [RequirementFilter.All] = new("All", null),
+        [MapPool.Curated] = new("Curated", null),
     };
 
     public State<ExploreMode> Mode { get; } = new(ExploreMode.Improve);
     public State<string> Style { get; } = new(Destinations.Midspeed);
     public State<MapPool> Pool { get; } = new(MapPool.AnyRanked);
-    /// <summary>Mod requirement filter (user request 2026-11-11): None = vanilla maps only.</summary>
-    public State<RequirementFilter> Requirements { get; } = new(RequirementFilter.None);
     public State<int> Offset { get; } = new(0);
     public State<IReadOnlyList<ExploreRow>> Rows { get; } = new(Array.Empty<ExploreRow>());
     public State<string> Status { get; } = new("");
@@ -93,14 +88,16 @@ internal class ExploreView : ReactiveComponent
                             FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
                             Items = StyleItems,
                             sKey = Style,
+                            // AccSaber ranks accuracy maps only: the style is locked to Accuracy (user, 2026-11-11).
+                            sInteractable = Pool.Map(p => p != MapPool.AccSaber),
                             OnKeyChanged = s => { Style.Value = s; OnChanged?.Invoke(); },
                         },
-                        // Same map pool setting as Training (D-041).
+                        // Ranked pools are shared with Training (D-041); Curated is Explore only (D-045).
                         new BsDropdown<MapPool>
                         {
                             FlexItem = { Size = new() { x = 28.pt, y = 5.5f.pt } },
-                            ModalParams = new() { MaxVisibleRows = 4 },
-                            Items = TrainingView.PoolItems,
+                            ModalParams = new() { MaxVisibleRows = 5 },
+                            Items = PoolItems,
                             sKey = Pool,
                             OnKeyChanged = p => { if (p != Pool.Value) { Pool.Value = p; OnPoolChanged?.Invoke(p); } },
                         },
@@ -115,20 +112,11 @@ internal class ExploreView : ReactiveComponent
                         {
                             FlexItem = { Size = new() { x = 60.pt, y = 5.pt } },
                             MinValue = -3f, MaxValue = 3f, ValueStep = 1f, Value = 0f,
-                            ValueFormatter = v => v == 0 ? "Your level" : v < 0 ? $"Easier {-v:0}" : $"Harder {v:0}",
+                            ValueFormatter = v => v == 0 ? "Training level" : v < 0 ? $"Easier {-v:0}" : $"Harder {v:0}",
                             OnValueChanged = v => { Offset.Value = Mathf.RoundToInt(v); OnChanged?.Invoke(); },
                         },
                         new BsPrimaryTextButton { Text = "New list", FlexItem = { Size = new() { x = 20.pt, y = 5.5f.pt } },
                                                   sInteractable = Busy.Map(b => !b), OnClick = () => OnNewList?.Invoke() },
-                        new Label { Text = "Mods", FontSize = 3f, Color = Dim },
-                        new BsDropdown<RequirementFilter>
-                        {
-                            FlexItem = { Size = new() { x = 24.pt, y = 5.5f.pt } },
-                            ModalParams = new() { MaxVisibleRows = 5 },
-                            Items = RequirementItems,
-                            sKey = Requirements,
-                            OnKeyChanged = r => { if (r != Requirements.Value) { Requirements.Value = r; OnChanged?.Invoke(); } },
-                        },
                     }
                 },
                 new Label { sText = Counts, FontSize = 2.6f, Color = Dim, RichText = true },

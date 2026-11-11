@@ -58,6 +58,9 @@ internal sealed class ProgressionService
     private readonly PlayLogStore _playLog;
     private readonly UserStateStore _stateStore;
     private readonly ScoreCache _scoreCache;
+    /// <summary>Unranked PBs, for Explore's Curated pool only (D-045); synced once per session on first use.</summary>
+    private readonly ScoreCache _unrankedCache;
+    private Task<IReadOnlyList<PlayEvidence>>? _unrankedScores;
     private readonly BeatLeaderClient _beatLeader;
     private readonly PlatformStatsClient _platforms;
     private ProgressionEngine? _engine;
@@ -77,6 +80,7 @@ internal sealed class ProgressionService
         _platforms = platforms;
         _stateStore = new UserStateStore(Path.Combine(dataDir, "state.json"));
         _scoreCache = new ScoreCache(Path.Combine(dataDir, "beatleader-scores.json"));
+        _unrankedCache = new ScoreCache(Path.Combine(dataDir, "beatleader-unranked-scores.json"), ScoreType.Unranked);
         _progress = new ProgressStore(Path.Combine(dataDir, "progress.json"));
         State = _stateStore.Load();
     }
@@ -103,10 +107,12 @@ internal sealed class ProgressionService
         SaveState();
     }
 
+    /// <summary>AccSaber is an accuracy pool: choosing it also focuses the Accuracy style (user, 2026-11-11).</summary>
     public void SetMapPool(MapPool pool)
     {
         State.MapPool = pool;
-        SaveState();
+        if (pool == MapPool.AccSaber) SetFocus(Destinations.Accuracy);
+        else SaveState();
     }
 
     public void Skip(MapKey map)
@@ -172,7 +178,8 @@ internal sealed class ProgressionService
             var report = _engine!.Analyze(evidence, Destinations.All, Since);
             var newAchievements = TrackProgress(report, evidence);
 
-            var focus = string.IsNullOrEmpty(State.FocusPath) ? SuggestFocus(report) : State.FocusPath;
+            var focus = State.MapPool == MapPool.AccSaber ? Destinations.Accuracy
+                : string.IsNullOrEmpty(State.FocusPath) ? SuggestFocus(report) : State.FocusPath;
             var (calibration, startLevel) = Calibrate(focus, report, log, evidence);
             if (startLevel is double level && !report.Paths.ContainsKey(focus)
                 && _engine.Analyze(evidence, new[] { focus }, Since, new Dictionary<string, double> { [focus] = level })
@@ -272,20 +279,67 @@ internal sealed class ProgressionService
         if (_beatLeaderScores.Count == 0) _beatLeaderScores = _scoreCache.Cached();
     }
 
-    /// <summary>Explore side feature: a fresh list for a style, mode and difficulty offset (uses cached scores).</summary>
+    /// <summary>
+    /// Explore side feature: a fresh list for a style, mode and difficulty offset (uses cached scores). The pool is
+    /// Explore's own choice: a ranked pool (shared with Training) or Curated (D-045, adds unranked BeatLeader PBs).
+    /// </summary>
     public async Task<(ExploreResult result, int[] counts)> ExploreAsync(string path, ExploreMode mode, int offset, int seed,
-        RequirementFilter requirements, CancellationToken ct = default)
+        MapPool pool, CancellationToken ct = default)
     {
         await EnsureEngineAsync(ct);
-        _engine!.Catalog.Pool = State.MapPool;
+        _engine!.Catalog.Pool = State.MapPool; // Training's pool, for Training's level below
+        var catalog = _engine.ExploreCatalog;
+        catalog.Pool = pool;
+        // One shared sync per session (Explore reloads on every slider step); not cancelled with a superseded request.
+        var unranked = pool == MapPool.Curated ? await (_unrankedScores ??= LoadUnrankedScoresAsync()) : Array.Empty<PlayEvidence>();
         return await Task.Run(() =>
         {
-            var evidence = Evidence(_playLog.ReadAll(out _)).Where(e => Since == null || e.TimeUtc >= Since.Value);
-            var rated = evidence.Select(_engine!.Catalog.Rate).Where(r => r != null).Select(r => r!).ToList();
+            var log = _playLog.ReadAll(out _);
+            var all = Evidence(log);
+            var ranked = all.Where(e => Since == null || e.TimeUtc >= Since.Value).ToList();
+            // D-047: slider 0 = the difficulty Training works at on this style (same evidence, ranked maps only); after a
+            // fresh start, starter maps aim at the calibrated level as in Training.
+            var startLevel = FreshStartLevel(path, log, all);
+            var report = _engine!.Analyze(all, new[] { path }, Since,
+                startLevel is double s ? new Dictionary<string, double> { [path] = s } : null);
+            var level = Explorer.TrainingLevel(report, path);
+            var rated = ranked.Concat(unranked.Where(e => Since == null || e.TimeUtc >= Since.Value))
+                .Select(catalog.Rate).Where(r => r != null).Select(r => r!).ToList();
             var best = ProfileBuilder.BestPerMap(rated);
-            return (Explorer.Suggest(path, mode, offset, best, _model!, _engine.Catalog, seed, requirements: requirements),
-                    Explorer.Counts(path, mode, best, _model!, _engine.Catalog, requirements));
+            return (Explorer.Suggest(path, mode, offset, best, _model!, catalog, seed, level: level),
+                    Explorer.Counts(path, mode, best, _model!, catalog, level));
         }, ct);
+    }
+
+    /// <summary>
+    /// Fresh start (D-040), read-only (Explore, D-047): the level a style's starter maps aim at — the calibration estimate
+    /// once done, the level of the next calibration map while it runs, the cautious level when skipped — as
+    /// <see cref="Calibrate"/> gives Training, without picking maps. Null outside a fresh start or without an old level.
+    /// </summary>
+    private double? FreshStartLevel(string path, IReadOnlyList<PlayRecord> log, List<PlayEvidence> evidence)
+    {
+        if (State.StartMode != StartMode.Fresh) return null;
+        if (!_engine!.Analyze(evidence, new[] { path }).Paths.TryGetValue(path, out var old)) return null;
+        var oldLevel = old.State.Difficulty;
+        if (State.Calibrations.TryGetValue(path, out var c) && c.Skipped) return Calibrator.CautiousLevel(oldLevel);
+        var status = Calibrator.Status(oldLevel, State.CalibrationPicks(path), log);
+        return status.Done ? status.Estimate : status.Level;
+    }
+
+    /// <summary>Unranked BeatLeader PBs (synced, falling back to the cache; none without BeatLeader import).</summary>
+    private async Task<IReadOnlyList<PlayEvidence>> LoadUnrankedScoresAsync()
+    {
+        if (State.StartMode != StartMode.ImportBeatLeader && State.StartMode != StartMode.Fresh || string.IsNullOrEmpty(State.PlayerId))
+            return Array.Empty<PlayEvidence>();
+        try
+        {
+            return await _unrankedCache.SyncAsync(_beatLeader, State.PlayerId, DateTime.UtcNow);
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Warn($"BeatLeader unranked sync failed, using cached scores: {e.Message}");
+            return _unrankedCache.Cached();
+        }
     }
 
     public async Task<IReadOnlyList<PlatformStats>> GetPlatformStatsAsync(string playerId, CancellationToken ct = default)
@@ -343,7 +397,7 @@ internal sealed class ProgressionService
                 TargetAccuracy = pick.TargetAccuracy,
                 Recommendation = new MapRecommendation
                 {
-                    Map = pick.Map, Name = map.Name, AxisRating = pick.Axis, Stars = map.Ratings[""].Stars,
+                    Map = pick.Map, Name = map.Name, Mapper = map.Mapper, AxisRating = pick.Axis, Stars = map.Ratings[""].Stars,
                     TargetAccuracy = pick.TargetAccuracy,
                 },
             },

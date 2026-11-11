@@ -114,7 +114,7 @@ namespace SkillProgression.Core.Progression
             var waypoint = pathModel.Waypoints.OrderBy(w => Math.Abs(w.Difficulty - level)).First();
             var popularityKey = $"{path}|{waypoint.Index}";
             var best = catalog.Recommendable(path)
-                .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRelevant(path, r, model.Thresholds))
+                .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
                 .Select(m => (map: m, key: new MapKey(m.Hash, m.Characteristic, m.Difficulty), r: m.Ratings[""]))
                 .Where(x => !exclude.Contains(x.key))
                 .Select(x => (x.map, x.key, x.r, axis: PathRules.Axis(path, x.r)))

@@ -19,6 +19,7 @@ namespace SkillProgression.Core.Progression
     {
         public MapKey Map { get; set; }
         public string Name { get; set; } = "";
+        public string Mapper { get; set; } = "";
         public double AxisRating { get; set; }
         public double Stars { get; set; }
         public double ExpectedAccuracy { get; set; }
@@ -114,11 +115,12 @@ namespace SkillProgression.Core.Progression
 
         /// <param name="offset">Difficulty steps relative to the player's level on the style (negative = easier).</param>
         /// <param name="seed">Different seeds give different lists ("New list").</param>
-        /// <param name="requirements">Which maps to list by the mods they use (see <see cref="RequirementFilter"/>).</param>
+        /// <param name="level">Difficulty slider position 0 centres on (D-047: Training's, see
+        /// <see cref="TrainingLevel"/>); null = the player's own level on the style.</param>
         public static ExploreResult Suggest(string path, ExploreMode mode, int offset, IReadOnlyList<RatedPlay> bestPlays,
-            ModelFile model, MapCatalog catalog, int seed, int count = DefaultCount, RequirementFilter requirements = RequirementFilter.None)
+            ModelFile model, MapCatalog catalog, int seed, int count = DefaultCount, double? level = null)
         {
-            var ctx = Prepare(path, mode, bestPlays, model, catalog, requirements);
+            var ctx = Prepare(path, mode, bestPlays, model, catalog, level);
             var center = Center(ctx, offset);
             var half = ctx.Step;
             var widened = false;
@@ -142,34 +144,46 @@ namespace SkillProgression.Core.Progression
 
         /// <summary>Candidates per slider position (MinOffset..MaxOffset) without widening (D-032 B).</summary>
         public static int[] Counts(string path, ExploreMode mode, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog,
-            RequirementFilter requirements = RequirementFilter.None)
+            double? level = null)
         {
-            var ctx = Prepare(path, mode, bestPlays, model, catalog, requirements);
+            var ctx = Prepare(path, mode, bestPlays, model, catalog, level);
             return Enumerable.Range(MinOffset, MaxOffset - MinOffset + 1)
                 .Select(o => InWindow(ctx, Center(ctx, o), ctx.Step).Count).ToArray();
         }
 
+        /// <summary>
+        /// D-047: the difficulty Training works at on a path — its top objective's map centre (push: next waypoint; polish:
+        /// D-038 centre), else the starter's; null when the report has neither.
+        /// </summary>
+        public static double? TrainingLevel(PlayerReport report, string path) =>
+            report.Paths.TryGetValue(path, out var progress) && progress.Objectives.Count > 0 ? progress.Objectives[0].MapCentre
+            : report.Starters.TryGetValue(path, out var starter) ? starter.MapCentre
+            : (double?)null;
+
         private static Context Prepare(string path, ExploreMode mode, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog,
-            RequirementFilter requirements)
+            double? level)
         {
             var t = model.Thresholds;
             var pathModel = model.Paths.FirstOrDefault(p => p.Destination == path);
             var spread = pathModel?.DifficultySpread > 0 ? pathModel.DifficultySpread : 1.0;
+            // Level and accuracy estimate from ranked plays only: curated-only maps have no pp (D-045).
+            var rankedPlays = bestPlays.Where(p => MapPools.IsRanked(p.Map)).ToList();
             var ctx = new Context
             {
                 Path = path, Mode = mode, Step = Math.Max(0.25, spread * 0.35),
-                Estimator = AccuracyEstimator.Fit(path, bestPlays, t),
-                Level = PathState.Compute(path, bestPlays, t)?.Difficulty
+                Estimator = AccuracyEstimator.Fit(path, rankedPlays, t),
+                Level = level
+                        ?? PathState.Compute(path, rankedPlays, t)?.Difficulty
                         ?? pathModel?.Waypoints.OrderBy(w => w.Index).FirstOrDefault()?.Difficulty ?? 0,
             };
 
             if (mode == ExploreMode.Improve)
             {
                 ctx.Pool = bestPlays
-                    .Where(p => PathRules.IsRelevant(path, p.Ratings, t) && catalog.IsRecommendable(p.Map, path) && MapRequirements.Matches(requirements, p.Map))
+                    .Where(p => PathRules.IsRecommendable(catalog, p.Map, p.Ratings, path, t))
                     .Select(p => new ExploreItem
                     {
-                        Map = p.Evidence.Map, Name = p.Map.Name, AxisRating = PathRules.Axis(path, p.Ratings), Stars = p.Ratings.Stars,
+                        Map = p.Evidence.Map, Name = p.Map.Name, Mapper = p.Map.Mapper, AxisRating = PathRules.Axis(path, p.Ratings), Stars = p.Ratings.Stars,
                         ExpectedAccuracy = ctx.Estimator.Expected(p.Ratings, path), CurrentAccuracy = p.Accuracy,
                     })
                     .Where(i => i.ExpectedAccuracy - i.CurrentAccuracy >= MinGain)
@@ -180,14 +194,16 @@ namespace SkillProgression.Core.Progression
 
             var played = new HashSet<MapKey>(bestPlays.Select(p => p.Evidence.Map));
             var popularityKeys = pathModel?.Waypoints.Select(w => $"{path}|{w.Index}").ToArray() ?? Array.Empty<string>();
+            // Curated maps have no peer popularity (no population scores): rank them by BeatSaver score instead.
+            var curated = MapPools.Effective(catalog.Pool, path) == MapPool.Curated;
             ctx.Pool = catalog.Recommendable(path)
-                .Where(m => MapRequirements.Matches(requirements, m) && m.Ratings.TryGetValue("", out var r) && PathRules.IsRelevant(path, r, t))
+                .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, t))
                 .Select(m => (map: m, key: new MapKey(m.Hash, m.Characteristic, m.Difficulty), r: m.Ratings[""]))
                 .Where(x => !played.Contains(x.key))
                 .Select(x => (new ExploreItem
                 {
-                    Map = x.key, Name = x.map.Name, AxisRating = PathRules.Axis(path, x.r), Stars = x.r.Stars, ExpectedAccuracy = ctx.Estimator.Expected(x.r, path),
-                }, (double)popularityKeys.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0)))
+                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = PathRules.Axis(path, x.r), Stars = x.r.Stars, ExpectedAccuracy = ctx.Estimator.Expected(x.r, path),
+                }, curated ? x.map.BeatSaverScore : popularityKeys.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0)))
                 .ToList();
             return WithRange(ctx);
         }
@@ -200,10 +216,18 @@ namespace SkillProgression.Core.Progression
             return ctx;
         }
 
-        /// <summary>Window centre for a slider offset, kept inside the range where the style has maps.</summary>
+        /// <summary>Easier slider positions as shares of the level (-1, -2, -3), so they reach far easier maps on every style.</summary>
+        public static readonly double[] EasierShares = { 0.85, 0.70, 0.50 };
+
+        /// <summary>
+        /// Window centre for a slider offset, kept inside the range where the style has maps. Harder: level + steps; easier:
+        /// a share of the level (user, 2026-11-11: steps alone only reached ~0.8★ below the level on Accuracy).
+        /// </summary>
         private static double Center(Context ctx, int offset)
         {
-            var c = ctx.Level + offset * ctx.Step;
+            var c = offset < 0
+                ? ctx.Level * EasierShares[Math.Min(-offset, EasierShares.Length) - 1]
+                : ctx.Level + offset * ctx.Step;
             var lo = Math.Min(ctx.AxisMin + ctx.Step, ctx.AxisMax);
             var hi = Math.Max(ctx.AxisMax - ctx.Step, lo);
             return c < lo ? lo : c > hi ? hi : c;

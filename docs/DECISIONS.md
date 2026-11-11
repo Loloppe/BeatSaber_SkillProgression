@@ -284,11 +284,12 @@ Format: ID — date — decision — rationale. Open questions listed below with
   success. Missing still never lowers the level (D-030).
 
 - **D-043 — 2026-11-10 — Release and unranked maps (user).** Release = a .zip on a GitHub release with everything
-  needed (plugin, Core/Data libs, `UserData/SkillProgression/model.json.gz`), shipped by the user only once Reactive v2 is
+  needed (plugin, `UserData/SkillProgression/model.json.gz`; Core/Data libs no longer separate since D-046), shipped by the user only once Reactive v2 is
   public together with a matching BeatLeader build (closes Q-003 and model hosting: the model is bundled, no download).
   Unranked maps in Explore (D-032) postponed: BeatLeader ratings would have to be fetched per song for the whole
   BeatSaver catalogue (one call per song at ~3-4 / s), many hours to more than a day.
-- **D-044 — 2026-11-11 — Mod requirement filter in Explore (user choices).** A "Mods" dropdown in Explore: None
+- **D-044 — 2026-11-11 — Mod requirement filter in Explore (user choices). SUPERSEDED same day by D-045: filter,
+  `MapEntry.Requirements` and pipeline bits removed (BeatLeader doesn't rate modded maps, unrated maps are excluded).** A "Mods" dropdown in Explore: None
   (default) / Noodle / Mapping Ext. / Vivify / All, meaning **only that mod** (None = vanilla maps only, a mod = only maps
   using it, All = everything); applies to both Explore modes, not to Training; kept per session (not saved). Stored in
   model.json as `MapEntry.Requirements`, a list of **SongCore names** ("Noodle Extensions", "Mapping Extensions",
@@ -298,6 +299,44 @@ Format: ID — date — decision — rationale. Open questions listed below with
   Explore. Source today: BL `difficulty.requirements` bits for the SS/AccSaber extras; BL-ranked maps are assumed vanilla
   (not verified; the population DB has no requirements column). Current pools contain **no** such rated map.
   Safety net: `LevelLauncher` refuses to start a map whose `_requirements` aren't registered SongCore capabilities.
+- **D-045 — 2026-11-11 — Curated maps in Explore (user choices).** (a) **Explore only**: Training stays ranked, and
+  plays on curated maps never count for progression — `ProgressionEngine.Catalog` holds ranked maps only, Explore uses
+  `ExploreCatalog` (all maps); Explore's level and accuracy estimate also come from ranked plays only. (b) **Build time,
+  in the model**: `training/fetch_curated.py` (BeatSaver curated list + BL ratings per song, cached) → `build_model.py`
+  sets `Curated`/`BeatSaverScore` on model maps and adds rated curated maps ranked nowhere (ratings, no pp curves). Maps
+  curated after a build appear with the next model. (c) **Unrated maps excluded**: BL doesn't rate modded maps, so the
+  D-044 Mods filter was removed entirely (launch check kept). (d) **UI**: "Curated" is an extra entry in Explore's pool
+  dropdown; ranked entries still sync with Training, Curated is Explore-only and kept per session. (e) **Improve a
+  score** on Curated also uses the player's **unranked BeatLeader PBs** (`type=unranked`, own cache file
+  `beatleader-unranked-scores.json`, synced once per session on first Curated use; never used by progression).
+  Claude choice: Curated "never played" lists are ordered by BeatSaver score (no peer popularity without population
+  scores).
+  First build (2026-11-11): 13,020 curated songs → 29,210 rated Standard difficulties (1,336 unrated skipped); 3,816
+  model maps flagged curated, 25,394 curated-only maps added; model 33,455 maps, 41.5 MB raw / 7.3 MB gz (was 4.2 MB);
+  check-anchors 11/11.
+- **D-046 — 2026-11-11 — One shipped DLL: Core/Data sources compiled into the plugin (user choice, option B).** The
+  plugin project compiles `src/SkillProgression.Core/**/*.cs` and `src/SkillProgression.Data/**/*.cs` (linked, minus
+  obj/bin and Core's duplicate `IsExternalInit`) instead of referencing the projects; nothing goes to `Libs/` any more
+  (the game's Newtonsoft.Json stays external). Core and Data remain separate projects for the tests and the CLI, and the
+  plugin must not reference them. Chosen over ILRepack (no extra build dependency, no post-build merge, PDB line numbers
+  kept). All projects share LangVersion/Nullable via Directory.Build.props, so the code compiles identically.
+- **D-047 — 2026-11-11 — Explore's "Your level" = the difficulty Training works at (user choice, option A).** Explore
+  centred on the player's own level (pp-weighted median of top style plays), Training on its top objective: on Accuracy
+  the user's own level was 6.45★ (low-pass maps up to 7.5★ count as Accuracy) while Training polished around the next
+  waypoint's 4.25★ (D-038), so Explore showed 6–6.7★ maps. Now slider 0 = `Objective.MapCentre` of the style's top
+  objective (push: next waypoint difficulty; polish: D-038 centre), else the starter's, else the player's own level;
+  computed with Training's pool and evidence (ranked only). Applies to every style: push styles centre on the next
+  milestone (user's data: Speed 6.66 → 8.16 pass, Extreme 10.41 → 12.95★). Follow-ups (user, same day): slider 0 is
+  labelled **"Training level"**; after a **fresh start** Explore uses the calibrated level like Training (calibration
+  estimate when done, next calibration map's level while running, cautious level when skipped; read-only, no picks);
+  **easier positions are shares of the level** (-1/-2/-3 = 85% / 70% / 50%; harder stays level + 1..3 steps of
+  0.35 × spread), because steps alone only reached ~0.8★ below the level on Accuracy (user's data now: 4.25 → 3.61 /
+  2.97 / 2.12★). The window still clamps to where the style has maps (High Tech / Extreme bottom out at -2).
+- **D-048 — 2026-11-11 — AccSaber pool = Accuracy only (user; refines D-041).** Choosing AccSaber (Training or Explore)
+  focuses the Accuracy style and locks the style buttons (Reactive's `BsSegmentedControl` can only disable the whole
+  control, so all five look disabled with Accuracy selected). With AccSaber, every AccSaber map is an Accuracy map for
+  **recommendations** (Next up, starters, calibration, Explore) via `PathRules.IsRecommendable` — 4 of ~600 have a pass
+  rating above the Accuracy limit. Progress is still measured with the style rules (`IsRelevant`), pool-independent.
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are

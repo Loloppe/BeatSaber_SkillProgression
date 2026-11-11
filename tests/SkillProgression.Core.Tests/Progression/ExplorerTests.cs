@@ -101,36 +101,88 @@ public class ExplorerTests
     }
 
     [Fact]
-    public void Requirement_filter_lists_only_maps_using_the_selected_mod()
+    public void Curated_pool_ranks_never_played_maps_by_beatsaver_score()
     {
         var plays = Enumerable.Range(0, 10).Select(_ => (Map(10, 9.0, 4, "speed"), 0.94)).ToList();
-        var vanilla = Map(10, 9.0, 4, "speed");
-        var noodle = Map(10, 9.0, 4, "speed");
-        noodle.Requirements.Add(MapRequirements.NoodleExtensions);
-        var both = Map(10, 9.0, 4, "speed");
-        both.Requirements.AddRange(new[] { MapRequirements.NoodleExtensions, MapRequirements.Vivify });
-        var (model, catalog, best) = Setup(plays, new[] { vanilla, noodle, both });
+        var curated = Enumerable.Range(0, 60).Select(i => CuratedOnly(Map(10, 9.0, 4, "speed"), score: i / 60.0)).ToList();
+        var (model, catalog, best) = Setup(plays, curated);
+        catalog.Pool = MapPool.Curated;
 
-        string[] List(RequirementFilter f) => Explorer.Suggest("Speed", ExploreMode.NewMaps, 0, best, model, catalog, 1, requirements: f)
-            .Items.Select(i => i.Map.Hash).OrderBy(h => h).ToArray();
-        string[] Hashes(params MapEntry[] maps) => maps.Select(m => m.Hash).OrderBy(h => h).ToArray();
+        var items = Explorer.Suggest("Speed", ExploreMode.NewMaps, 0, best, model, catalog, 1).Items;
 
-        Assert.Equal(Hashes(vanilla), List(RequirementFilter.None));
-        Assert.Equal(Hashes(noodle, both), List(RequirementFilter.NoodleExtensions));
-        Assert.Equal(Hashes(both), List(RequirementFilter.Vivify));
-        Assert.Empty(List(RequirementFilter.MappingExtensions));
-        Assert.Equal(Hashes(vanilla, noodle, both), List(RequirementFilter.All));
+        var top = curated.OrderByDescending(m => m.BeatSaverScore).Take(Explorer.DefaultCount * 4).Select(m => m.Hash).ToHashSet();
+        Assert.Equal(Explorer.DefaultCount, items.Count);
+        Assert.All(items, i => Assert.Contains(i.Map.Hash, top));
     }
 
     [Fact]
-    public void Requirement_filter_also_applies_to_improve_mode()
+    public void Curated_plays_do_not_move_the_explore_level()
     {
-        var noodle = Map(10, 9.0, 4, "speed", predictedAcc: 0.95);
-        noodle.Requirements.Add(MapRequirements.NoodleExtensions);
-        var plays = Enumerable.Range(0, 9).Select(_ => (Map(10, 9.0, 4, "speed", predictedAcc: 0.95), 0.94)).Append((noodle, 0.90)).ToList();
-        var (model, catalog, best) = Setup(plays, Array.Empty<MapEntry>());
+        // No ranked Speed plays, many easy curated ones (no pp): the level is the style's first waypoint (8), as for a
+        // player without ranked evidence, not the curated plays' difficulty.
+        var easyCurated = Enumerable.Range(0, 30).Select(_ => (CuratedOnly(Map(6, 5.0, 4, "speed"), 0.5), 0.99));
+        var candidates = Enumerable.Range(0, 70).Select(i => CuratedOnly(Map(8, 5.0 + 0.1 * i, 4, "speed"), 0.5)).ToList();
+        var (model, catalog, best) = Setup(easyCurated, candidates);
+        catalog.Pool = MapPool.Curated;
 
-        Assert.Empty(Explorer.Suggest("Speed", ExploreMode.Improve, 0, best, model, catalog, 1).Items);
-        Assert.Single(Explorer.Suggest("Speed", ExploreMode.Improve, 0, best, model, catalog, 1, requirements: RequirementFilter.NoodleExtensions).Items);
+        var result = Explorer.Suggest("Speed", ExploreMode.NewMaps, 0, best, model, catalog, 1);
+
+        Assert.InRange((result.RangeLow + result.RangeHigh) / 2, 7.9, 8.1);
+    }
+
+    [Fact]
+    public void A_given_level_centres_the_window_instead_of_the_players_own()
+    {
+        var plays = Enumerable.Range(0, 10).Select(_ => (Map(10, 9.0, 4, "speed"), 0.94)).ToList();
+        var pool = Enumerable.Range(0, 80).Select(i => Map(8, 6.0 + 0.05 * i, 4, "speed")).ToList(); // pass 6.0 - 9.95
+        var (model, catalog, best) = Setup(plays, pool);
+
+        var own = Explorer.Suggest("Speed", ExploreMode.NewMaps, 0, best, model, catalog, 1);
+        var training = Explorer.Suggest("Speed", ExploreMode.NewMaps, 0, best, model, catalog, 1, level: 7.0);
+
+        Assert.InRange((own.RangeLow + own.RangeHigh) / 2, 8.9, 9.1);
+        Assert.InRange((training.RangeLow + training.RangeHigh) / 2, 6.9, 7.1);
+        Assert.All(training.Items, i => Assert.InRange(i.AxisRating, 6.6, 7.4));
+    }
+
+    [Fact]
+    public void Training_level_is_the_top_objectives_map_centre_else_the_starters()
+    {
+        var report = new PlayerReport();
+        report.Paths["Speed"] = new PathProgress { Objectives = { new Objective { Kind = ObjectiveKind.Polish, MapCentre = 7.5 },
+                                                                new Objective { Kind = ObjectiveKind.Push, MapCentre = 9.5 } } };
+        report.Starters["Accuracy"] = new Objective { MapCentre = 4.2 };
+
+        Assert.Equal(7.5, Explorer.TrainingLevel(report, "Speed"));
+        Assert.Equal(4.2, Explorer.TrainingLevel(report, "Accuracy"));
+        Assert.Null(Explorer.TrainingLevel(report, "Midspeed"));
+    }
+
+    [Fact]
+    public void Easier_positions_are_shares_of_the_level()
+    {
+        var plays = Enumerable.Range(0, 10).Select(_ => (Map(10, 9.0, 4, "speed"), 0.94)).ToList();
+        var pool = Enumerable.Range(0, 200).Select(i => Map(8, 3.0 + 0.04 * i, 4, "speed")).ToList(); // pass 3.0 - 10.96
+        var (model, catalog, best) = Setup(plays, pool);
+
+        double Centre(int offset)
+        {
+            var r = Explorer.Suggest("Speed", ExploreMode.NewMaps, offset, best, model, catalog, 1, level: 8.0);
+            return (r.RangeLow + r.RangeHigh) / 2;
+        }
+
+        Assert.InRange(Centre(-1), 6.75, 6.85); // 85%
+        Assert.InRange(Centre(-2), 5.55, 5.65); // 70%
+        Assert.InRange(Centre(-3), 3.95, 4.05); // 50%
+        Assert.InRange(Centre(1), 8.3, 8.4);    // + one step (0.35)
+    }
+
+    private static MapEntry CuratedOnly(MapEntry map, double score)
+    {
+        map.RankedBeatLeader = false;
+        map.Curated = true;
+        map.BeatSaverScore = score;
+        map.PpCurves.Clear();
+        return map;
     }
 }

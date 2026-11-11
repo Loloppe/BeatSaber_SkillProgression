@@ -83,6 +83,17 @@ public class BeatLeaderClientTests
     }
 
     [Fact]
+    public async Task Unranked_scores_query_unranked_maps()
+    {
+        var handler = new StubHandler(_ => Json(Page(0)));
+        var client = new BeatLeaderClient(new HttpClient(handler), delayBetweenPages: TimeSpan.Zero);
+
+        await client.GetScoresAsync("1", ScoreType.Unranked);
+
+        Assert.Contains("type=unranked", handler.Urls.Single());
+    }
+
+    [Fact]
     public async Task Unknown_player_raises_a_clear_error()
     {
         var client = new BeatLeaderClient(new HttpClient(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))));

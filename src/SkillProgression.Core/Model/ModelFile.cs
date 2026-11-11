@@ -95,6 +95,8 @@ namespace SkillProgression.Core.Model
         public string Characteristic { get; set; } = "Standard";
         public string Difficulty { get; set; } = "";
         public string Name { get; set; } = "";
+        /// <summary>Mapper name(s) as BeatLeader shows them (may be empty in older models).</summary>
+        public string Mapper { get; set; } = "";
         /// <summary>BL map type tag: acc / midspeed / speed / tech (may be empty for unranked maps).</summary>
         public string MapType { get; set; } = "";
         public double Duration { get; set; }
@@ -102,8 +104,10 @@ namespace SkillProgression.Core.Model
         public bool RankedBeatLeader { get; set; }
         public bool RankedScoreSaber { get; set; }
         public bool RankedAccSaber { get; set; }
-        /// <summary>Gameplay mods the map uses, as SongCore names them (see <see cref="MapRequirements"/>); empty for vanilla.</summary>
-        public List<string> Requirements { get; set; } = new List<string>();
+        /// <summary>Curated on BeatSaver (Explore's Curated pool, D-045). Curated maps ranked nowhere have no pp curves.</summary>
+        public bool Curated { get; set; }
+        /// <summary>BeatSaver vote score (0..1), set for curated maps: orders Explore's Curated "never played" list.</summary>
+        public double BeatSaverScore { get; set; }
         /// <summary>Ratings by speed modifier: "" (none), "SS", "FS", "SF".</summary>
         public Dictionary<string, MapRatings> Ratings { get; set; } = new Dictionary<string, MapRatings>();
         /// <summary>acc -> pp lookup curves by speed modifier (D-026).</summary>

@@ -11,6 +11,8 @@ Base: `https://api.beatleader.com`. Local server clone (`../beatleader-server`) 
 **Scores (PB only, one per leaderboard)**: `GET /player/{id}/scores`
 - `page` (1-based), `count` ≤ 100, `sortBy` (date|pp|accPP|passPP|techPP|acc|stars|…), `order`,
   `type` (3=ranked), `time_from`/`time_to` (unix s) → **incremental sync**, `includeIO=true` → `scoreImprovement`.
+  `type` is a `DifficultyStatus` by name: `type=ranked` / `type=unranked` (status 0; verified live 2026-11-11, used by
+  Explore's Curated pool, D-045). Unranked scores carry no stars.
 - Score: accuracy, pp, passPP, accPP, techPP, fcAccuracy, fcPp, modifiers, missedNotes, badCuts, bombCuts,
   wallsHit, pauses, fullCombo, maxCombo, maxStreak, accLeft/accRight, timeset/timepost, replay (.bsor URL), rank.
 - `playCount`/`lastTryTime` zeroed unless authenticated as the player or player made stats public.
@@ -37,6 +39,8 @@ an SS-only and an AccSaber-only map, status 0, returned stars/pass/acc/tech/pred
 8 MappingExtensions, 16 Cinema, 32 V3, 64 OptionalProperties, 128 VNJS, 256 Vivify, 512 V3Pepega, 1024 GroupLighting.
 Chroma/Noodles/ME/Cinema are copied from BeatSaver's per-diff `chroma`/`ne`/`me`/`cinema` flags (map *uses* the mod,
 required or suggested); Vivify comes from the diff's Info.dat `_requirements` (D-044).
+**BeatLeader does not rate modded maps** (checked 2026-11-11: 9/9 curated Noodle maps, incl. Vivify ones, and the
+SS-ranked Noodle map "mumei" have no stars/pass/acc/tech; predictedAcc may still be present).
 
 **Rate limits**: GET 50 / 10 s per IP; `/players` 10/10 s; `/maps` 8/s. 429 + Retry-After. No ETag.
 No published third-party ToS found → send descriptive User-Agent, throttle ~3 req/s.
@@ -72,3 +76,11 @@ Store BL leaderboard id, SS leaderboard id, AccSaber diff uuid as attributes. Pi
 (SS upper, others lower); map updates change hash (BeatSaver key stays); unranked/re-ranked → re-sync status;
 exotic SS modes (`SoloStandard-PinkPlay_Controllable`).
 Offline aggregators: SongDetailsCache (installed, SS+BL stars, ranked states), BeatSaver API (`stars`, `blStars`).
+
+## BeatSaver curated maps (D-045, verified 2026-11-11)
+`GET https://api.beatsaver.com/search/text/{page}?curated=true&sortOrder=Curated&pageSize=100` (0-based page, newest
+curation first, **100 per page max**; `info.pages` is computed for 20 per page whatever `pageSize` is — stop at the
+first empty page). 13,098 curated maps on 2026-11-11 (131 pages). Map: `curatedAt`, `curator`, `stats.score` (0..1),
+`ranked`/`blRanked`, `versions[].hash`; diff: characteristic, difficulty, njs, nps, notes, `ne`/`me`/`chroma`/`cinema`
+(**no Vivify flag**). No ratings: BeatLeader `/leaderboards/hash/{hash}` rates most curated maps (9/10 in a sample,
+status 0), except modded ones (see Requirements above).

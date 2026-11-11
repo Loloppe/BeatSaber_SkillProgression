@@ -169,6 +169,8 @@ internal class TrainingView : ReactiveComponent
                                     FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
                                     Items = FocusItems,
                                     sKey = Focus,
+                                    // AccSaber ranks accuracy maps only: the style is locked to Accuracy (user, 2026-11-11).
+                                    sInteractable = Pool.Map(p => p != MapPool.AccSaber),
                                     OnKeyChanged = k => OnFocusChanged?.Invoke(k),
                                 },
                                 new BsDropdown<MapPool>

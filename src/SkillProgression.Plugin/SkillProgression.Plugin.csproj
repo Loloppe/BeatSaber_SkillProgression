@@ -3,7 +3,8 @@
     Beat Saber 1.40.8 plugin (D-001). Thin game/UI layer only: logic lives in SkillProgression.Core / .Data (D-014).
     BeatSaberDir comes from SkillProgression.Plugin.csproj.user (gitignored), e.g.
       <BeatSaberDir>C:\Users\...\BSInstances\1.40.8</BeatSaberDir>
-    Builds copy SkillProgression.dll to Plugins/ (BSMT) and our Core/Data assemblies to Libs/ (CopyLibsToGame).
+    Builds copy SkillProgression.dll to Plugins/ (BSMT). Core/Data are compiled into it (one shipped DLL); their own
+    projects still build separately for the tests and the CLI.
   -->
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
@@ -22,9 +23,11 @@
     <None Include="SkillProgression.Plugin.csproj.user" Condition="Exists('SkillProgression.Plugin.csproj.user')" />
   </ItemGroup>
 
+  <!-- Core/Data sources compiled into the plugin instead of shipped in Libs/ (user, 2026-11-11). Same LangVersion and
+       Nullable for all projects (Directory.Build.props); Core's IsExternalInit duplicates the plugin's. -->
   <ItemGroup>
-    <ProjectReference Include="..\SkillProgression.Core\SkillProgression.Core.csproj" />
-    <ProjectReference Include="..\SkillProgression.Data\SkillProgression.Data.csproj" />
+    <Compile Include="..\SkillProgression.Core\**\*.cs" Exclude="..\SkillProgression.Core\obj\**;..\SkillProgression.Core\bin\**;..\SkillProgression.Core\IsExternalInit.cs" Link="Core\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\SkillProgression.Data\**\*.cs" Exclude="..\SkillProgression.Data\obj\**;..\SkillProgression.Data\bin\**" Link="Data\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <!-- Game -->
@@ -75,9 +78,7 @@
     <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.2" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Our non-plugin assemblies go to Libs/ (BSIPA resolves them there); the game's Newtonsoft is used. -->
-  <Target Name="CopyLibsToGame" AfterTargets="Build" Condition="'$(BeatSaberDir)' != '' And '$(DisableCopyToPlugins)' != 'True'">
-    <Copy SourceFiles="$(OutputPath)SkillProgression.Core.dll;$(OutputPath)SkillProgression.Data.dll" DestinationFolder="$(BeatSaberDir)/Libs" SkipUnchangedFiles="true" />
+  <Target Name="CopyModelToGame" AfterTargets="Build" Condition="'$(BeatSaberDir)' != '' And '$(DisableCopyToPlugins)' != 'True'">
     <!-- Dev convenience until model hosting is decided: the locally built model goes to UserData. -->
     <Copy SourceFiles="$(MSBuildThisFileDirectory)../../data/model/model.json.gz" DestinationFolder="$(BeatSaberDir)/UserData/SkillProgression"
           SkipUnchangedFiles="true" Condition="Exists('$(MSBuildThisFileDirectory)../../data/model/model.json.gz')" />

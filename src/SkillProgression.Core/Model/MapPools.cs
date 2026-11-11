@@ -10,6 +10,8 @@ namespace SkillProgression.Core.Model
         AccSaber,
         /// <summary>Ranked on any of the three.</summary>
         AnyRanked,
+        /// <summary>BeatSaver curated maps BeatLeader rates, ranked or not (D-045). Explore only, never Training.</summary>
+        Curated,
     }
 
     public static class MapPools
@@ -22,8 +24,12 @@ namespace SkillProgression.Core.Model
         {
             MapPool.ScoreSaber => map.RankedScoreSaber,
             MapPool.AccSaber => map.RankedAccSaber,
-            MapPool.AnyRanked => map.RankedBeatLeader || map.RankedScoreSaber || map.RankedAccSaber,
+            MapPool.AnyRanked => IsRanked(map),
+            MapPool.Curated => map.Curated,
             _ => map.RankedBeatLeader,
         };
+
+        /// <summary>Ranked on BeatLeader, ScoreSaber or AccSaber: the only maps progression is measured on (D-045).</summary>
+        public static bool IsRanked(MapEntry map) => map.RankedBeatLeader || map.RankedScoreSaber || map.RankedAccSaber;
     }
 }

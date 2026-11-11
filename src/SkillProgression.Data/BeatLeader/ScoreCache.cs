@@ -40,8 +40,14 @@ namespace SkillProgression.Data.BeatLeader
         public static readonly TimeSpan SyncOverlap = TimeSpan.FromHours(1);
 
         private readonly string _filePath;
+        private readonly ScoreType _type;
 
-        public ScoreCache(string filePath) => _filePath = filePath;
+        /// <param name="type">Ranked PBs (progression) or unranked ones (Explore's Curated pool, D-045), one file each.</param>
+        public ScoreCache(string filePath, ScoreType type = ScoreType.Ranked)
+        {
+            _filePath = filePath;
+            _type = type;
+        }
 
         public DateTime? LastSyncUtc => Read()?.LastSyncUtc;
 
@@ -53,7 +59,7 @@ namespace SkillProgression.Data.BeatLeader
             if (data == null || data.PlayerId != playerId) data = new FileData { PlayerId = playerId };
 
             var since = data.LastSyncUtc - SyncOverlap;
-            var fresh = await client.GetRankedScoresAsync(playerId, since, cancellationToken, progress).ConfigureAwait(false);
+            var fresh = await client.GetScoresAsync(playerId, _type, since, cancellationToken, progress).ConfigureAwait(false);
             var byMap = data.Scores.ToDictionary(e => Key(e));
             foreach (var e in fresh)
                 byMap[e.Map] = new Entry

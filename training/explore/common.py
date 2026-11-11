@@ -31,7 +31,7 @@ def connect() -> sqlite3.Connection:
 
 def load_leaderboards(con) -> pd.DataFrame:
     return pd.read_sql_query(
-        """select Id, Name, Hash, DifficultyName, ModeName, Stars, PassRating, AccRating, TechRating, PredictedAcc,
+        """select Id, Name, Mapper, Hash, DifficultyName, ModeName, Stars, PassRating, AccRating, TechRating, PredictedAcc,
                   MapType, Duration, Njs, NoteCount, NoteSpan, PeakEbpm, LinearPercent, MultiPercentage,
                   HardSwingRatio, HitDistance, ParityErrors, BombAvoidances, CrouchWalls, DodgeWalls, Count,
                   ModifiersRatingId

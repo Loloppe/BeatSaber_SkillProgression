@@ -125,13 +125,40 @@ def pool_maps(maps):
             continue
         extra.append({
             "Hash": p["Hash"], "Characteristic": "Standard", "Difficulty": p["Difficulty"], "Name": p["Name"],
+            "Mapper": p.get("Mapper", ""),
             "MapType": next((name for bit, name in TYPE_BITS if p["Type"] & bit), ""),
             "Duration": round(p["Duration"], 2), "PeakEbpm": 0,
             "RankedBeatLeader": False, "RankedScoreSaber": p["RankedScoreSaber"], "RankedAccSaber": p["RankedAccSaber"],
             "Ratings": p["Ratings"], "PpCurves": {mod: curve_for(r) for mod, r in p["Ratings"].items()}, "PeerPopularity": {},
-            # Mods the map uses (SongCore names), only when any; BeatLeader-ranked maps are assumed vanilla.
-            **({"Requirements": p["Requirements"]} if p.get("Requirements") else {}),
         })
+    return extra
+
+
+def curated_maps(maps):
+    """BeatSaver curated maps (fetch_curated.py, D-045): flags model maps that are curated and adds the curated maps
+    BeatLeader rates but nobody ranks, with ratings only (no pp: Explore's Curated pool, never progression)."""
+    path = os.path.join(out_dir("09_curated"), "curated.json")
+    if not os.path.exists(path):
+        print("no curated maps (run fetch_curated.py)")
+        return []
+    by_key = {(m["Hash"], m["Difficulty"]): m for m in maps}
+    extra = []
+    for c in json.load(open(path, encoding="utf-8")):
+        known = by_key.get((c["Hash"], c["Difficulty"]))
+        if known is not None:
+            known["Curated"], known["BeatSaverScore"] = True, c["BeatSaverScore"]
+            continue
+        entry = {
+            "Hash": c["Hash"], "Characteristic": "Standard", "Difficulty": c["Difficulty"], "Name": c["Name"],
+            "Mapper": c.get("Mapper", ""),
+            "MapType": next((name for bit, name in TYPE_BITS if c["Type"] & bit), ""),
+            "Duration": round(c["Duration"], 2), "PeakEbpm": 0,
+            "RankedBeatLeader": False, "RankedScoreSaber": False, "RankedAccSaber": False,
+            "Curated": True, "BeatSaverScore": c["BeatSaverScore"],
+            "Ratings": c["Ratings"], "PpCurves": {}, "PeerPopularity": {},
+        }
+        by_key[(c["Hash"], c["Difficulty"])] = entry
+        extra.append(entry)
     return extra
 
 
@@ -190,6 +217,7 @@ def main():
         pool = pools.loc[r.Id] if r.Id in pools.index else None
         maps.append({
             "Hash": r.Hash.upper(), "Characteristic": "Standard", "Difficulty": r.DifficultyName, "Name": r.Name,
+            "Mapper": r.Mapper or "",
             "MapType": r.MapType or "", "Duration": round(float(r.Duration or 0), 2), "PeakEbpm": round(float(r.PeakEbpm or 0), 1),
             "RankedBeatLeader": True,
             "RankedScoreSaber": bool(pool is not None and pool.SS), "RankedAccSaber": bool(pool is not None and pool.AS),
@@ -200,6 +228,9 @@ def main():
     print(f"pool maps added: {len(extra)} (ScoreSaber {sum(m['RankedScoreSaber'] for m in extra)}, "
           f"AccSaber {sum(m['RankedAccSaber'] for m in extra)})")
     maps += extra
+    curated = curated_maps(maps)
+    print(f"curated: {sum(1 for m in maps if m.get('Curated'))} model maps flagged, {len(curated)} unranked maps added")
+    maps += curated
 
     model = {"Version": 1, "GeneratedAt": datetime.now(timezone.utc).isoformat(),
              "SourceDb": os.path.basename(POPULATION_DB), "Thresholds": thresholds(), "Leaning": leaning(),

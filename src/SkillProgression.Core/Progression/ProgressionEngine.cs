@@ -33,10 +33,15 @@ namespace SkillProgression.Core.Progression
         public ProgressionEngine(ModelFile model)
         {
             _model = model ?? throw new ArgumentNullException(nameof(model));
-            _catalog = new MapCatalog(model.Maps);
+            // Progression only sees ranked maps; curated-only maps are for Explore (D-045).
+            _catalog = new MapCatalog(model.Maps.Where(MapPools.IsRanked));
+            ExploreCatalog = new MapCatalog(model.Maps);
         }
 
         public MapCatalog Catalog => _catalog;
+
+        /// <summary>Every model map, curated ones included: Explore only (its pool filter picks ranked or curated).</summary>
+        public MapCatalog ExploreCatalog { get; }
 
         /// <param name="evidence">Cleared plays (BeatLeader PBs and/or local play log).</param>
         /// <param name="paths">Paths to analyse; null = every destination with a path model.</param>

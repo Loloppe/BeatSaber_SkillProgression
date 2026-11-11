@@ -27,6 +27,18 @@ namespace SkillProgression.Core.Progression
             }
         }
 
+        /// <summary>
+        /// Whether a map may be recommended on a path (Next up, starters, calibration, Explore): in the catalog's pool and
+        /// of the path's style — except the AccSaber pool, where every AccSaber map is an Accuracy map (user, 2026-11-11;
+        /// 4 of ~600 have a pass rating above the Accuracy limit). Progress is still measured with <see cref="IsRelevant"/>.
+        /// </summary>
+        public static bool IsRecommendable(MapCatalog catalog, MapEntry map, MapRatings r, string path, DestinationThresholds t)
+        {
+            var pool = MapPools.Effective(catalog.Pool, path);
+            if (!MapPools.Contains(pool, map)) return false;
+            return pool == MapPool.AccSaber ? path == Destinations.Accuracy : IsRelevant(path, r, t);
+        }
+
         /// <summary>Difficulty on the path axis: pass for Speed/Midspeed, tech for High Tech, stars otherwise.</summary>
         public static double Axis(string path, MapRatings r)
         {

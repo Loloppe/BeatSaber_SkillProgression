@@ -18,6 +18,7 @@ namespace SkillProgression.Core.Progression
     {
         public MapKey Map { get; set; }
         public string Name { get; set; } = "";
+        public string Mapper { get; set; } = "";
         public double AxisRating { get; set; }
         /// <summary>BeatLeader star rating (same ratings as <see cref="AxisRating"/>).</summary>
         public double Stars { get; set; }
@@ -37,6 +38,8 @@ namespace SkillProgression.Core.Progression
         public double Priority { get; set; }
         public double CurrentValue { get; set; }
         public double TargetValue { get; set; }
+        /// <summary>Path-axis difficulty the objective's maps are centred on (Explore's "Training level" follows it, D-047).</summary>
+        public double MapCentre { get; set; }
         public List<MapRecommendation> Maps { get; set; } = new List<MapRecommendation>();
     }
 
@@ -118,14 +121,14 @@ namespace SkillProgression.Core.Progression
             var push = new Objective
             {
                 Kind = ObjectiveKind.Push, Gap = pushGap, Priority = pushGap * 2 * pathModel.PushPrior,
-                CurrentValue = state.Difficulty, TargetValue = nextD,
+                CurrentValue = state.Difficulty, TargetValue = nextD, MapCentre = nextD,
                 Maps = Diversify(catalog.Recommendable(path)
-                    .Where(m => !played.ContainsKey(Key(m)) && m.Ratings.TryGetValue("", out var r) && PathRules.IsRelevant(path, r, model.Thresholds))
+                    .Where(m => !played.ContainsKey(Key(m)) && m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
                     .Select(m => (map: m, axis: PathRules.Axis(path, m.Ratings[""])))
                     .Where(x => x.axis >= state.Difficulty - step && x.axis <= nextD + step)
                     .Select(x => new MapRecommendation
                     {
-                        Map = Key(x.map), Name = x.map.Name, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars,
+                        Map = Key(x.map), Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars,
                         TargetAccuracy = x.map.Ratings[""].PredictedAcc + next.AccuracyResidual,
                         PeerPopularity = x.map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
                     })
@@ -136,7 +139,7 @@ namespace SkillProgression.Core.Progression
             // already above that difficulty polishes around it (easier maps), not at their own harder level, where
             // beating the predicted accuracy is harder. Falls back to their own level when nothing was played there.
             var polishCandidates = played.Values
-                .Where(p => PathRules.IsRelevant(path, p.Ratings, model.Thresholds) && catalog.IsRecommendable(p.Map, path))
+                .Where(p => PathRules.IsRecommendable(catalog, p.Map, p.Ratings, path, model.Thresholds))
                 .Select(p => (play: p, axis: PathRules.Axis(path, p.Ratings)))
                 .ToList();
             var polishCentre = state.Difficulty;
@@ -147,12 +150,12 @@ namespace SkillProgression.Core.Progression
             var polish = new Objective
             {
                 Kind = ObjectiveKind.Polish, Gap = polishGap, Priority = polishGap * 2 * (1 - pathModel.PushPrior),
-                CurrentValue = state.AccuracyResidual, TargetValue = next.AccuracyResidual,
+                CurrentValue = state.AccuracyResidual, TargetValue = next.AccuracyResidual, MapCentre = polishCentre,
                 Maps = Diversify(polishCandidates
                     .Where(x => Math.Abs(x.axis - polishCentre) <= polishWindow)
                     .Select(x => new MapRecommendation
                     {
-                        Map = x.play.Evidence.Map, Name = x.play.Map.Name, AxisRating = x.axis, Stars = x.play.Ratings.Stars,
+                        Map = x.play.Evidence.Map, Name = x.play.Map.Name, Mapper = x.play.Map.Mapper, AxisRating = x.axis, Stars = x.play.Ratings.Stars,
                         TargetAccuracy = x.play.Ratings.PredictedAcc + next.AccuracyResidual,
                         CurrentAccuracy = x.play.Accuracy,
                         PeerPopularity = x.play.Map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
@@ -186,19 +189,19 @@ namespace SkillProgression.Core.Progression
             var popularity = new[] { $"{path}|{first.Index}", $"{path}|{first.Index + 1}" };
             var playedSet = new HashSet<MapKey>(played);
             var maps = catalog.Recommendable(path)
-                .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRelevant(path, r, model.Thresholds))
+                .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
                 .Select(m => (map: m, key: Key(m), axis: PathRules.Axis(path, m.Ratings[""])))
                 .Where(x => !playedSet.Contains(x.key) && x.axis <= easier && x.axis >= floor)
                 .Select(x => new MapRecommendation
                 {
-                    Map = x.key, Name = x.map.Name, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars,
+                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars,
                     TargetAccuracy = x.map.Ratings[""].PredictedAcc + first.AccuracyResidual,
                     PeerPopularity = popularity.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0),
                 })
                 .OrderByDescending(r => r.PeerPopularity).ThenBy(r => r.AxisRating);
             return new Objective
             {
-                Kind = ObjectiveKind.Push, Gap = 0, Priority = 0, CurrentValue = floor, TargetValue = easier,
+                Kind = ObjectiveKind.Push, Gap = 0, Priority = 0, CurrentValue = floor, TargetValue = easier, MapCentre = easier,
                 Maps = Diversify(maps, catalog),
             };
         }

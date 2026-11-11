@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HMUI;
 using Reactive;
+using SkillProgression.Core.Model;
 using SkillProgression.Core.Plays;
 using SkillProgression.Core.Profiles;
 using SkillProgression.Core.Progression;
@@ -28,6 +29,8 @@ internal class ExploreViewController : ViewController
     private List<ExploreItem> _items = new();
     private int _seed = Environment.TickCount;
     private int _requestId;
+    /// <summary>Curated picked in Explore (session only; Training keeps its ranked pool, D-045).</summary>
+    private bool _curated;
 
     public override void DidActivate(bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)
     {
@@ -36,7 +39,13 @@ internal class ExploreViewController : ViewController
             _view = new ExploreView
             {
                 OnChanged = () => _ = LoadAsync(), OnNewList = NewList, OnPlay = Play,
-                OnPoolChanged = pool => { _service.SetMapPool(pool); _ = LoadAsync(); },
+                OnPoolChanged = pool =>
+                {
+                    _curated = pool == MapPool.Curated;
+                    if (!_curated) _service.SetMapPool(pool);
+                    if (pool == MapPool.AccSaber) _view!.Style.Value = Destinations.Accuracy;
+                    _ = LoadAsync();
+                },
             };
             _view.Use(transform);
             _view.WithRectExpand();
@@ -45,8 +54,9 @@ internal class ExploreViewController : ViewController
         if (addedToHierarchy && _view != null)
         {
             var focus = _service.State.FocusPath;
-            _view.Style.Value = string.IsNullOrEmpty(focus) ? Destinations.Midspeed : focus;
-            _view.Pool.Value = _service.State.MapPool;
+            _view.Pool.Value = _curated ? MapPool.Curated : _service.State.MapPool;
+            _view.Style.Value = _view.Pool.Value == MapPool.AccSaber ? Destinations.Accuracy
+                : string.IsNullOrEmpty(focus) ? Destinations.Midspeed : focus;
             _ = LoadAsync();
         }
     }
@@ -65,7 +75,7 @@ internal class ExploreViewController : ViewController
         _view.Status.Value = "Finding maps";
         try
         {
-            var (result, counts) = await _service.ExploreAsync(_view.Style.Value, _view.Mode.Value, _view.Offset.Value, _seed, _view.Requirements.Value);
+            var (result, counts) = await _service.ExploreAsync(_view.Style.Value, _view.Mode.Value, _view.Offset.Value, _seed, _view.Pool.Value);
             if (request != _requestId) return; // a newer request (slider moved) superseded this one
             var items = result.Items;
             _items = items;

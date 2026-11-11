@@ -36,14 +36,23 @@ namespace SkillProgression.Data.BeatLeader
 
         /// <summary>All ranked personal bests of a player, newest first; only those set at or after <paramref name="since"/>.</summary>
         /// <param name="progress">Receives 0..1 as pages arrive (UI progress bar for the first import).</param>
-        public async Task<IReadOnlyList<PlayEvidence>> GetRankedScoresAsync(string playerId, DateTime? since = null,
+        public Task<IReadOnlyList<PlayEvidence>> GetRankedScoresAsync(string playerId, DateTime? since = null,
+            CancellationToken cancellationToken = default, IProgress<double>? progress = null) =>
+            GetScoresAsync(playerId, ScoreType.Ranked, since, cancellationToken, progress);
+
+        /// <summary>
+        /// Personal bests of a player on maps of one status (type=ranked / unranked, BL DifficultyStatus; unranked
+        /// verified 2026-11-11), newest first; only those set at or after <paramref name="since"/>.
+        /// </summary>
+        public async Task<IReadOnlyList<PlayEvidence>> GetScoresAsync(string playerId, ScoreType type, DateTime? since = null,
             CancellationToken cancellationToken = default, IProgress<double>? progress = null)
         {
             if (string.IsNullOrWhiteSpace(playerId)) throw new ArgumentException("Player id is required.", nameof(playerId));
+            var status = type == ScoreType.Unranked ? "unranked" : "ranked";
             var result = new List<PlayEvidence>();
             for (var page = 1; ; page++)
             {
-                var url = $"{_baseUrl}/player/{Uri.EscapeDataString(playerId)}/scores?type=ranked&sortBy=date&order=desc" +
+                var url = $"{_baseUrl}/player/{Uri.EscapeDataString(playerId)}/scores?type={status}&sortBy=date&order=desc" +
                           $"&count={PageSize}&page={page}";
                 if (since.HasValue)
                     url += "&time_from=" + new DateTimeOffset(DateTime.SpecifyKind(since.Value, DateTimeKind.Utc)).ToUnixTimeSeconds();
@@ -128,6 +137,14 @@ namespace SkillProgression.Data.BeatLeader
                 }
             }
         }
+    }
+
+    /// <summary>Map status of the scores to fetch.</summary>
+    public enum ScoreType
+    {
+        Ranked,
+        /// <summary>Unranked maps (Explore's Curated pool, D-045); never used for progression.</summary>
+        Unranked,
     }
 
     public sealed class BeatLeaderException : Exception
