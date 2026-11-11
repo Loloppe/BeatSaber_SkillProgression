@@ -129,6 +129,8 @@ def pool_maps(maps):
             "Duration": round(p["Duration"], 2), "PeakEbpm": 0,
             "RankedBeatLeader": False, "RankedScoreSaber": p["RankedScoreSaber"], "RankedAccSaber": p["RankedAccSaber"],
             "Ratings": p["Ratings"], "PpCurves": {mod: curve_for(r) for mod, r in p["Ratings"].items()}, "PeerPopularity": {},
+            # Mods the map uses (SongCore names), only when any; BeatLeader-ranked maps are assumed vanilla.
+            **({"Requirements": p["Requirements"]} if p.get("Requirements") else {}),
         })
     return extra
 

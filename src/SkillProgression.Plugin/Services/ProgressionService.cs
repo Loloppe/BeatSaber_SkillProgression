@@ -273,7 +273,8 @@ internal sealed class ProgressionService
     }
 
     /// <summary>Explore side feature: a fresh list for a style, mode and difficulty offset (uses cached scores).</summary>
-    public async Task<(ExploreResult result, int[] counts)> ExploreAsync(string path, ExploreMode mode, int offset, int seed, CancellationToken ct = default)
+    public async Task<(ExploreResult result, int[] counts)> ExploreAsync(string path, ExploreMode mode, int offset, int seed,
+        RequirementFilter requirements, CancellationToken ct = default)
     {
         await EnsureEngineAsync(ct);
         _engine!.Catalog.Pool = State.MapPool;
@@ -282,8 +283,8 @@ internal sealed class ProgressionService
             var evidence = Evidence(_playLog.ReadAll(out _)).Where(e => Since == null || e.TimeUtc >= Since.Value);
             var rated = evidence.Select(_engine!.Catalog.Rate).Where(r => r != null).Select(r => r!).ToList();
             var best = ProfileBuilder.BestPerMap(rated);
-            return (Explorer.Suggest(path, mode, offset, best, _model!, _engine.Catalog, seed),
-                    Explorer.Counts(path, mode, best, _model!, _engine.Catalog));
+            return (Explorer.Suggest(path, mode, offset, best, _model!, _engine.Catalog, seed, requirements: requirements),
+                    Explorer.Counts(path, mode, best, _model!, _engine.Catalog, requirements));
         }, ct);
     }
 

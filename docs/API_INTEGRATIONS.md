@@ -33,6 +33,10 @@ Rating change history: `/leaderboard/{id}` → `changes[]`.
 **Ratings exist for unranked maps too** (user, verified 2026-11-10 anonymously via `/leaderboards/hash/{hash}`:
 an SS-only and an AccSaber-only map, status 0, returned stars/pass/acc/tech/predictedAcc). Map `type` may be 0
 (untagged) on unranked maps. No pp/rank for unranked maps.
+**Requirements** (`difficulty.requirements`, bit flags, `beatleader-server` `Requirements` enum): 2 Chroma, 4 Noodles,
+8 MappingExtensions, 16 Cinema, 32 V3, 64 OptionalProperties, 128 VNJS, 256 Vivify, 512 V3Pepega, 1024 GroupLighting.
+Chroma/Noodles/ME/Cinema are copied from BeatSaver's per-diff `chroma`/`ne`/`me`/`cinema` flags (map *uses* the mod,
+required or suggested); Vivify comes from the diff's Info.dat `_requirements` (D-044).
 
 **Rate limits**: GET 50 / 10 s per IP; `/players` 10/10 s; `/maps` 8/s. 429 + Retry-After. No ETag.
 No published third-party ToS found → send descriptive User-Agent, throttle ~3 req/s.

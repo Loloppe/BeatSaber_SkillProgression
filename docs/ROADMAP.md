@@ -78,4 +78,7 @@ Outstanding / known gaps:
 - ~~Fresh-start calibration session (D-010)~~ — done 2026-11-10 (D-040), awaiting in-game test.
 - **Release (D-043):** the user ships a GitHub release .zip (plugin + libs + bundled model) once Reactive v2 is public
   with a matching BeatLeader build — nothing to build for hosting. ~~No-fail soft-fail flag and pause count~~ — done (D-036).
+- 2026-11-11: launch refuses maps with missing required mods (SongCore check); download waits for a running SongCore
+  load; "Downloading" button reset on errors; Explore "Mods" requirement filter (D-044) — awaiting in-game test.
+  Next (user): curated maps in Explore (the filter matters there; BeatSaver diffs carry `ne`/`me`/`vivify` flags).
 - ~~SS/AccSaber map pools (D-023)~~ — done 2026-11-10 (D-041). Postponed: unranked maps in Explore (D-032, D-043: catalogue-wide BL fetch too long). ~~adaptive step sizes~~ done 2026-11-10 (D-042).

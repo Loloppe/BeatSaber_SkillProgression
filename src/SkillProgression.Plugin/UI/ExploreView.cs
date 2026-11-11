@@ -41,9 +41,20 @@ internal class ExploreView : ReactiveComponent
         [Destinations.Extreme] = new("Extreme", null),
     };
 
+    private static readonly Dictionary<RequirementFilter, BsDropdownItem> RequirementItems = new()
+    {
+        [RequirementFilter.None] = new("None", null),
+        [RequirementFilter.NoodleExtensions] = new("Noodle", null),
+        [RequirementFilter.MappingExtensions] = new("Mapping Ext.", null),
+        [RequirementFilter.Vivify] = new("Vivify", null),
+        [RequirementFilter.All] = new("All", null),
+    };
+
     public State<ExploreMode> Mode { get; } = new(ExploreMode.Improve);
     public State<string> Style { get; } = new(Destinations.Midspeed);
     public State<MapPool> Pool { get; } = new(MapPool.AnyRanked);
+    /// <summary>Mod requirement filter (user request 2026-11-11): None = vanilla maps only.</summary>
+    public State<RequirementFilter> Requirements { get; } = new(RequirementFilter.None);
     public State<int> Offset { get; } = new(0);
     public State<IReadOnlyList<ExploreRow>> Rows { get; } = new(Array.Empty<ExploreRow>());
     public State<string> Status { get; } = new("");
@@ -109,6 +120,15 @@ internal class ExploreView : ReactiveComponent
                         },
                         new BsPrimaryTextButton { Text = "New list", FlexItem = { Size = new() { x = 20.pt, y = 5.5f.pt } },
                                                   sInteractable = Busy.Map(b => !b), OnClick = () => OnNewList?.Invoke() },
+                        new Label { Text = "Mods", FontSize = 3f, Color = Dim },
+                        new BsDropdown<RequirementFilter>
+                        {
+                            FlexItem = { Size = new() { x = 24.pt, y = 5.5f.pt } },
+                            ModalParams = new() { MaxVisibleRows = 5 },
+                            Items = RequirementItems,
+                            sKey = Requirements,
+                            OnKeyChanged = r => { if (r != Requirements.Value) { Requirements.Value = r; OnChanged?.Invoke(); } },
+                        },
                     }
                 },
                 new Label { sText = Counts, FontSize = 2.6f, Color = Dim, RichText = true },

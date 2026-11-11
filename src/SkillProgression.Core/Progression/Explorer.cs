@@ -114,10 +114,11 @@ namespace SkillProgression.Core.Progression
 
         /// <param name="offset">Difficulty steps relative to the player's level on the style (negative = easier).</param>
         /// <param name="seed">Different seeds give different lists ("New list").</param>
+        /// <param name="requirements">Which maps to list by the mods they use (see <see cref="RequirementFilter"/>).</param>
         public static ExploreResult Suggest(string path, ExploreMode mode, int offset, IReadOnlyList<RatedPlay> bestPlays,
-            ModelFile model, MapCatalog catalog, int seed, int count = DefaultCount)
+            ModelFile model, MapCatalog catalog, int seed, int count = DefaultCount, RequirementFilter requirements = RequirementFilter.None)
         {
-            var ctx = Prepare(path, mode, bestPlays, model, catalog);
+            var ctx = Prepare(path, mode, bestPlays, model, catalog, requirements);
             var center = Center(ctx, offset);
             var half = ctx.Step;
             var widened = false;
@@ -140,14 +141,16 @@ namespace SkillProgression.Core.Progression
         }
 
         /// <summary>Candidates per slider position (MinOffset..MaxOffset) without widening (D-032 B).</summary>
-        public static int[] Counts(string path, ExploreMode mode, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog)
+        public static int[] Counts(string path, ExploreMode mode, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog,
+            RequirementFilter requirements = RequirementFilter.None)
         {
-            var ctx = Prepare(path, mode, bestPlays, model, catalog);
+            var ctx = Prepare(path, mode, bestPlays, model, catalog, requirements);
             return Enumerable.Range(MinOffset, MaxOffset - MinOffset + 1)
                 .Select(o => InWindow(ctx, Center(ctx, o), ctx.Step).Count).ToArray();
         }
 
-        private static Context Prepare(string path, ExploreMode mode, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog)
+        private static Context Prepare(string path, ExploreMode mode, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog,
+            RequirementFilter requirements)
         {
             var t = model.Thresholds;
             var pathModel = model.Paths.FirstOrDefault(p => p.Destination == path);
@@ -163,7 +166,7 @@ namespace SkillProgression.Core.Progression
             if (mode == ExploreMode.Improve)
             {
                 ctx.Pool = bestPlays
-                    .Where(p => PathRules.IsRelevant(path, p.Ratings, t) && catalog.IsRecommendable(p.Map, path))
+                    .Where(p => PathRules.IsRelevant(path, p.Ratings, t) && catalog.IsRecommendable(p.Map, path) && MapRequirements.Matches(requirements, p.Map))
                     .Select(p => new ExploreItem
                     {
                         Map = p.Evidence.Map, Name = p.Map.Name, AxisRating = PathRules.Axis(path, p.Ratings), Stars = p.Ratings.Stars,
@@ -178,7 +181,7 @@ namespace SkillProgression.Core.Progression
             var played = new HashSet<MapKey>(bestPlays.Select(p => p.Evidence.Map));
             var popularityKeys = pathModel?.Waypoints.Select(w => $"{path}|{w.Index}").ToArray() ?? Array.Empty<string>();
             ctx.Pool = catalog.Recommendable(path)
-                .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRelevant(path, r, t))
+                .Where(m => MapRequirements.Matches(requirements, m) && m.Ratings.TryGetValue("", out var r) && PathRules.IsRelevant(path, r, t))
                 .Select(m => (map: m, key: new MapKey(m.Hash, m.Characteristic, m.Difficulty), r: m.Ratings[""]))
                 .Where(x => !played.Contains(x.key))
                 .Select(x => (new ExploreItem

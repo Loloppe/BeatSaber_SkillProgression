@@ -241,6 +241,7 @@ internal class TrainingViewController : ViewController
             {
                 _view.Status.Value = error;
                 _view.Busy.Value = false;
+                RefreshRows();
             }
         }
         catch (Exception e)
@@ -248,7 +249,15 @@ internal class TrainingViewController : ViewController
             Plugin.Log.Error(e);
             _view.Status.Value = "Could not start this map. See the log for details.";
             _view.Busy.Value = false;
+            RefreshRows();
         }
+    }
+
+    /// <summary>Rebuilds the Next up rows, resetting a "Downloading" button and showing newly downloaded maps.</summary>
+    private void RefreshRows()
+    {
+        if (_view == null || _snapshot is not { } s) return;
+        _view.NextUp.Value = s.NextUp.Select(n => Format.Row(s.FocusPath, n, MapDownloader.IsDownloaded(n.Recommendation.Map.Hash))).ToList();
     }
 
     private async void OnLevelFinished(NextUpItem item, PlayRecord? record)

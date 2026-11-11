@@ -65,7 +65,7 @@ internal class ExploreViewController : ViewController
         _view.Status.Value = "Finding maps";
         try
         {
-            var (result, counts) = await _service.ExploreAsync(_view.Style.Value, _view.Mode.Value, _view.Offset.Value, _seed);
+            var (result, counts) = await _service.ExploreAsync(_view.Style.Value, _view.Mode.Value, _view.Offset.Value, _seed, _view.Requirements.Value);
             if (request != _requestId) return; // a newer request (slider moved) superseded this one
             var items = result.Items;
             _items = items;
@@ -109,6 +109,7 @@ internal class ExploreViewController : ViewController
             {
                 _view.Status.Value = error;
                 _view.Busy.Value = false;
+                RefreshRows();
             }
         }
         catch (Exception e)
@@ -116,6 +117,7 @@ internal class ExploreViewController : ViewController
             Plugin.Log.Error(e);
             _view.Status.Value = "Could not start this map. See the log for details.";
             _view.Busy.Value = false;
+            RefreshRows();
         }
     }
 
@@ -123,7 +125,14 @@ internal class ExploreViewController : ViewController
     {
         if (_view == null) return;
         _view.Busy.Value = false;
-        _view.Rows.Value = _items.Select(i => Format.ExploreRow(_view.Style.Value, i, MapDownloader.IsDownloaded(i.Map.Hash))).ToList();
+        RefreshRows();
         _view.Status.Value = Format.ExploreResult(item, record);
+    }
+
+    /// <summary>Rebuilds the rows, resetting a "Downloading" button and showing newly downloaded maps.</summary>
+    private void RefreshRows()
+    {
+        if (_view == null) return;
+        _view.Rows.Value = _items.Select(i => Format.ExploreRow(_view.Style.Value, i, MapDownloader.IsDownloaded(i.Map.Hash))).ToList();
     }
 }

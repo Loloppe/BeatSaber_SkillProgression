@@ -23,6 +23,8 @@ API = "https://api.beatleader.com/leaderboards/hash/{}"
 USER_AGENT = "SkillProgression-model-build (github: SkillProgression)"
 DELAY = 1.0  # per worker; responses take seconds, so WORKERS x 1 / (response + 1 s) stays under 5 / s
 WORKERS = 4
+# BeatLeader difficulty.requirements bits -> SongCore requirement names (Explore filter, 2026-11-11; Chroma not tracked).
+REQUIREMENT_BITS = ((4, "Noodle Extensions"), (8, "Mapping Extensions"), (256, "Vivify"))
 
 
 def fetch(hash_: str, raw_dir: str) -> dict | None:
@@ -91,9 +93,11 @@ def main():
                 if m is not None:
                     r[code] = m
             ss, as_ = flags[key]
+            req = int(d.get("requirements") or 0)
             maps.append({"Hash": h, "Difficulty": key[1], "Name": song.get("name", ""), "Type": int(d.get("type") or 0),
                          "Duration": float(d.get("duration") or song.get("duration") or 0),
-                         "RankedScoreSaber": ss, "RankedAccSaber": as_, "Ratings": r})
+                         "RankedScoreSaber": ss, "RankedAccSaber": as_, "Ratings": r,
+                         "Requirements": [name for bit, name in REQUIREMENT_BITS if req & bit]})
     out = os.path.join(out_dir("08_pool_ratings"), "pool_ratings.json")
     json.dump(maps, open(out, "w", encoding="utf-8"))
     print(f"{len(maps)} of {len(wanted_keys)} difficulties rated ({missing} songs unavailable) -> {out}")

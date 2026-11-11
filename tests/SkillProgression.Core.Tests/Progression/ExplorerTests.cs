@@ -99,4 +99,38 @@ public class ExplorerTests
         var b = Explorer.Suggest("Speed", ExploreMode.NewMaps, 0, best, model, catalog, 2).Items.Select(i => i.Map.Hash);
         Assert.NotEqual(a, b);
     }
+
+    [Fact]
+    public void Requirement_filter_lists_only_maps_using_the_selected_mod()
+    {
+        var plays = Enumerable.Range(0, 10).Select(_ => (Map(10, 9.0, 4, "speed"), 0.94)).ToList();
+        var vanilla = Map(10, 9.0, 4, "speed");
+        var noodle = Map(10, 9.0, 4, "speed");
+        noodle.Requirements.Add(MapRequirements.NoodleExtensions);
+        var both = Map(10, 9.0, 4, "speed");
+        both.Requirements.AddRange(new[] { MapRequirements.NoodleExtensions, MapRequirements.Vivify });
+        var (model, catalog, best) = Setup(plays, new[] { vanilla, noodle, both });
+
+        string[] List(RequirementFilter f) => Explorer.Suggest("Speed", ExploreMode.NewMaps, 0, best, model, catalog, 1, requirements: f)
+            .Items.Select(i => i.Map.Hash).OrderBy(h => h).ToArray();
+        string[] Hashes(params MapEntry[] maps) => maps.Select(m => m.Hash).OrderBy(h => h).ToArray();
+
+        Assert.Equal(Hashes(vanilla), List(RequirementFilter.None));
+        Assert.Equal(Hashes(noodle, both), List(RequirementFilter.NoodleExtensions));
+        Assert.Equal(Hashes(both), List(RequirementFilter.Vivify));
+        Assert.Empty(List(RequirementFilter.MappingExtensions));
+        Assert.Equal(Hashes(vanilla, noodle, both), List(RequirementFilter.All));
+    }
+
+    [Fact]
+    public void Requirement_filter_also_applies_to_improve_mode()
+    {
+        var noodle = Map(10, 9.0, 4, "speed", predictedAcc: 0.95);
+        noodle.Requirements.Add(MapRequirements.NoodleExtensions);
+        var plays = Enumerable.Range(0, 9).Select(_ => (Map(10, 9.0, 4, "speed", predictedAcc: 0.95), 0.94)).Append((noodle, 0.90)).ToList();
+        var (model, catalog, best) = Setup(plays, Array.Empty<MapEntry>());
+
+        Assert.Empty(Explorer.Suggest("Speed", ExploreMode.Improve, 0, best, model, catalog, 1).Items);
+        Assert.Single(Explorer.Suggest("Speed", ExploreMode.Improve, 0, best, model, catalog, 1, requirements: RequirementFilter.NoodleExtensions).Items);
+    }
 }

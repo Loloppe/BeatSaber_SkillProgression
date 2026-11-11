@@ -50,6 +50,10 @@ internal class LevelLauncher
             string.Equals(k.beatmapCharacteristic.serializedName, map.Characteristic, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(k.difficulty.ToString(), map.Difficulty, StringComparison.OrdinalIgnoreCase));
         if (key == default) return $"Difficulty {map.Characteristic} {map.Difficulty} not found in this map.";
+        // SongCore only blocks missing requirements on the level select Play button, which we bypass.
+        var missing = MissingRequirements(key);
+        if (missing.Count > 0)
+            return $"This map requires {string.Join(", ", missing)}, which {(missing.Count == 1 ? "is" : "are")} not installed.";
 
         _onFinished = onFinished;
         _current = map;
@@ -81,6 +85,15 @@ internal class LevelLauncher
             levelFinishedCallback: HandleLevelFinished,
             levelRestartedCallback: null);
         return null;
+    }
+
+    /// <summary>Map requirements (e.g. Noodle Extensions) with no capability registered in SongCore.</summary>
+    private static List<string> MissingRequirements(BeatmapKey key)
+    {
+        var requirements = SongCore.Collections.GetCustomLevelSongDifficultyData(key)?.additionalDifficultyData?._requirements;
+        if (requirements == null) return new List<string>();
+        var installed = SongCore.Collections.capabilities;
+        return requirements.Where(r => !string.IsNullOrWhiteSpace(r) && !installed.Contains(r)).Distinct().ToList();
     }
 
     private void HandleLevelFinished(StandardLevelScenesTransitionSetupDataSO setup, LevelCompletionResults results)

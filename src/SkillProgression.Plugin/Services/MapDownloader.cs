@@ -44,12 +44,19 @@ internal sealed class MapDownloader
         var folder = Path.Combine(CustomLevelPathHelper.customLevelsDirectoryPath, Sanitize($"{key} ({name} - {mapper})"));
         await Task.Run(() => Extract(bytes, folder), ct);
 
-        // Register with SongCore and wait until the level is loaded.
+        // Register with SongCore and wait until the level is loaded. RefreshSongs is ignored while a load is running
+        // (e.g. the startup scan), and that load may have listed the folders before ours existed: wait for it first.
+        await WaitUntil(() => !SongCore.Loader.AreSongsLoading, 180, "SongCore is still loading songs, try again in a moment.", ct);
         SongCore.Loader.Instance.RefreshSongs(false);
-        var deadline = DateTime.UtcNow.AddSeconds(60);
-        while (!IsDownloaded(hash))
+        await WaitUntil(() => IsDownloaded(hash), 60, "The map was downloaded but SongCore did not load it in time.", ct);
+    }
+
+    private static async Task WaitUntil(Func<bool> condition, int seconds, string timeoutMessage, CancellationToken ct)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(seconds);
+        while (!condition())
         {
-            if (DateTime.UtcNow > deadline) throw new TimeoutException("The map was downloaded but SongCore did not load it in time.");
+            if (DateTime.UtcNow > deadline) throw new TimeoutException(timeoutMessage);
             await Task.Delay(250, ct);
         }
     }

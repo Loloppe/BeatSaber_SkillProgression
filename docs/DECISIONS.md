@@ -288,6 +288,16 @@ Format: ID — date — decision — rationale. Open questions listed below with
   public together with a matching BeatLeader build (closes Q-003 and model hosting: the model is bundled, no download).
   Unranked maps in Explore (D-032) postponed: BeatLeader ratings would have to be fetched per song for the whole
   BeatSaver catalogue (one call per song at ~3-4 / s), many hours to more than a day.
+- **D-044 — 2026-11-11 — Mod requirement filter in Explore (user choices).** A "Mods" dropdown in Explore: None
+  (default) / Noodle / Mapping Ext. / Vivify / All, meaning **only that mod** (None = vanilla maps only, a mod = only maps
+  using it, All = everything); applies to both Explore modes, not to Training; kept per session (not saved). Stored in
+  model.json as `MapEntry.Requirements`, a list of **SongCore names** ("Noodle Extensions", "Mapping Extensions",
+  "Vivify"), omitted when empty, so BeatLeader and future BeatSaver/curated sources map into one format. **Chroma is
+  ignored** (counts as vanilla): sources can't tell required from suggested Chroma, and the launch check catches the rare
+  map that truly requires it. Chosen over an automatic installed-mods filter because curated maps are planned for
+  Explore. Source today: BL `difficulty.requirements` bits for the SS/AccSaber extras; BL-ranked maps are assumed vanilla
+  (not verified; the population DB has no requirements column). Current pools contain **no** such rated map.
+  Safety net: `LevelLauncher` refuses to start a map whose `_requirements` aren't registered SongCore capabilities.
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are

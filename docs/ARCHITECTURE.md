@@ -36,7 +36,7 @@ Fresh start (D-010) = evidence filter (ignore/decay before a date) + calibration
   typical equivalent rank).
 - `maps[]`: per BL-ranked difficulty: MapKey, ratings per speed modifier (none/SS/FS/SF: stars, pass, acc, tech,
   predicted acc), map type, duration, pool flags (BL/SS/AccSaber, D-023), **pp lookup curve per speed modifier**,
-  peer popularity per (path, waypoint).
+  peer popularity per (path, waypoint), `Requirements` (mods used, SongCore names; omitted when none — D-044).
 - Size estimate: a few MB raw, ~1–2 MB gzipped.
 
 ### pp in Core (D-026: lookup curves)

@@ -102,6 +102,8 @@ namespace SkillProgression.Core.Model
         public bool RankedBeatLeader { get; set; }
         public bool RankedScoreSaber { get; set; }
         public bool RankedAccSaber { get; set; }
+        /// <summary>Gameplay mods the map uses, as SongCore names them (see <see cref="MapRequirements"/>); empty for vanilla.</summary>
+        public List<string> Requirements { get; set; } = new List<string>();
         /// <summary>Ratings by speed modifier: "" (none), "SS", "FS", "SF".</summary>
         public Dictionary<string, MapRatings> Ratings { get; set; } = new Dictionary<string, MapRatings>();
         /// <summary>acc -> pp lookup curves by speed modifier (D-026).</summary>

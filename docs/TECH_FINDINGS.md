@@ -82,7 +82,11 @@ v2research\`.
 - Hiding: presenting our FlowCoordinator with null side screens hides the main menu, BSML mods panel, BL noticeboard.
   Third-party FloatingScreens are not covered (opt-in hiding, fragile). Settings-triggered game restart drops our flow.
 - Download: BeatSaver CDN zip → CustomLevels → `SongCore.Loader.Instance.RefreshSongs(false)` → wait for event →
-  verify level → start. Check map requirements against `SongCore.CapabilityRegistry`.
+  verify level → start.
+- Requirements: SongCore (3.15.3) blocks missing requirements only on the level-select Play button, NOT in
+  `StartStandardLevel`. `LevelLauncher` checks `SongCore.Collections.GetCustomLevelSongDifficultyData(key)
+  .additionalDifficultyData._requirements` against `SongCore.Collections.capabilities` before starting
+  (no `CapabilityRegistry` type exists in this SongCore version).
 - Drills: `PracticeSettings(startTime, speed)`; section end needs our own gameplay component (unverified).
   Speed modifiers via `gameplayModifiers.CopyWith(...)`.
 
