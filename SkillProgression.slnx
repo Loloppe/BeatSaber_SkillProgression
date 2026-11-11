@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SkillProgression.Core/SkillProgression.Core.csproj" />
+    <Project Path="src/SkillProgression.Data/SkillProgression.Data.csproj" />
+    <Project Path="src/SkillProgression.Plugin/SkillProgression.Plugin.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SkillProgression.Core.Tests/SkillProgression.Core.Tests.csproj" />
+    <Project Path="tests/SkillProgression.Data.Tests/SkillProgression.Data.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/SkillProgression.Tools/SkillProgression.Tools.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://raw.githubusercontent.com/bsmg/BSIPA-MetadataFileSchema/master/Schema.json",
+  "id": "SkillProgression",
+  "name": "Skill Progression",
+  "author": "SkillProgression",
+  "version": "0.1.0",
+  "description": "Data-driven skill progression for Beat Saber, built on BeatLeader, ScoreSaber and AccSaber data.",
+  "gameVersion": "1.40.8",
+  "dependsOn": {
+    "BSIPA": "^4.3.6",
+    "SiraUtil": "^3.2.1",
+    "BeatSaberMarkupLanguage": "^1.12.5",
+    "SongCore": "^3.15.2",
+    "Reactive": "^2.0.0"
+  },
+  "loadAfter": [ "BeatLeader" ]
+}

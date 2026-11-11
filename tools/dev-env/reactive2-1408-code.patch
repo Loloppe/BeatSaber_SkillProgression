@@ -1,0 +1,781 @@
+diff --git a/Source/0_Harmony/InstallersPatches/AppInstallerPatch.cs b/Source/0_Harmony/InstallersPatches/AppInstallerPatch.cs
+index 93a7c6fc..996499ac 100644
+--- a/Source/0_Harmony/InstallersPatches/AppInstallerPatch.cs
++++ b/Source/0_Harmony/InstallersPatches/AppInstallerPatch.cs
+@@ -1,15 +1,14 @@
+-﻿using BeatLeader.Installers;
+-using BGLib.AppFlow;
++﻿using System;
++using BeatLeader.Installers;
+ using HarmonyLib;
+ using JetBrains.Annotations;
+-using System;
+ 
+ namespace BeatLeader {
+-    [HarmonyPatch(typeof(FeatureAsyncInstaller), "InstallBindings")]
++    [HarmonyPatch(typeof(PCAppInit), "InstallBindings")]
+     public static class AppInstallerPatch {
+         [UsedImplicitly]
+         // ReSharper disable once InconsistentNaming
+-        private static void Postfix(FeatureAsyncInstaller __instance) {
++        private static void Postfix(PCAppInit __instance) {
+             try {
+                 OnAppInitInstaller.Install(__instance.Container);
+             } catch (Exception ex) {
+diff --git a/Source/0_Harmony/InstallersPatches/LevelDataEnhancerPatch.cs b/Source/0_Harmony/InstallersPatches/LevelDataEnhancerPatch.cs
+index c22ae10f..5b01abe8 100644
+--- a/Source/0_Harmony/InstallersPatches/LevelDataEnhancerPatch.cs
++++ b/Source/0_Harmony/InstallersPatches/LevelDataEnhancerPatch.cs
+@@ -5,33 +5,28 @@ using System.Reflection;
+ 
+ namespace BeatLeader
+ {
+-    [HarmonyPatch(typeof(StandardLevelScenesTransitionSetupDataSO), "Init")]
+-
++    [HarmonyPatch]
+     class LevelDataEnhancerPatch {
++        static MethodInfo TargetMethod() => AccessTools.FirstMethod(typeof(StandardLevelScenesTransitionSetupDataSO),
++            m => m.Name == nameof(StandardLevelScenesTransitionSetupDataSO.Init) &&
++                 m.GetParameters().All(p => p.ParameterType != typeof(IBeatmapLevelData)));
+         public static void Postfix(
+-        string gameMode,
+-        ref BeatmapKey beatmapKey,
+-        BeatmapLevel beatmapLevel,
+-        OverrideEnvironmentSettings? overrideEnvironmentSettings,
+-        ColorScheme? playerOverrideColorScheme,
+-        bool playerOverrideLightshowColors,
+-        GameplayModifiers gameplayModifiers,
+-        PlayerSpecificSettings playerSpecificSettings,
+-        PracticeSettings? practiceSettings,
+-        EnvironmentsListModel environmentsListModel) {
++            in BeatmapKey beatmapKey, 
++            BeatmapLevel beatmapLevel, 
++            OverrideEnvironmentSettings overrideEnvironmentSettings,
++            ColorScheme playerOverrideColorScheme, 
++            bool playerOverrideLightshowColors, 
++            ColorScheme beatmapOverrideColorScheme, 
++            GameplayModifiers gameplayModifiers, 
++            PlayerSpecificSettings playerSpecificSettings, 
++            PracticeSettings practiceSettings, 
++            EnvironmentsListModel environmentsListModel) {
+             Plugin.Log.Debug($"LevelDataEnhancerPatch.postfix {beatmapKey.levelId} {beatmapLevel.songName}");
+-
+             string environmentName = beatmapLevel.GetEnvironmentName(beatmapKey.beatmapCharacteristic, beatmapKey.difficulty);
+-
+-            if (overrideEnvironmentSettings?.overrideEnvironments == true) {
+-                environmentName = overrideEnvironmentSettings
+-                    .GetOverrideEnvironmentInfoForType(
+-                        environmentsListModel
+-                            .GetEnvironmentInfoBySerializedName(environmentName)
+-                            .environmentType)
+-                    .environmentName;
++            EnvironmentInfoSO? environmentInfoSO = environmentsListModel.GetEnvironmentInfoBySerializedName(environmentName);
++            if (environmentInfoSO != null && overrideEnvironmentSettings is { overrideEnvironments: true }) {
++                environmentName = overrideEnvironmentSettings.GetOverrideEnvironmentInfoForType(environmentInfoSO.environmentType).environmentName;
+             }
+-
+             MapEnhancer.beatmapKey = beatmapKey;
+             MapEnhancer.beatmapLevel = beatmapLevel;
+             MapEnhancer.gameplayModifiers = gameplayModifiers;
+@@ -41,4 +36,25 @@ namespace BeatLeader
+             MapEnhancer.colorScheme = playerOverrideColorScheme;
+         }
+     }
++
++    [HarmonyPatch]
++    class LevelDataEnhancerPatch2 {
++
++        static MethodInfo TargetMethod() => AccessTools.FirstMethod(typeof(StandardLevelScenesTransitionSetupDataSO),
++            m => m.Name == nameof(StandardLevelScenesTransitionSetupDataSO.Init) &&
++                 m.GetParameters().Any(p => p.ParameterType == typeof(IBeatmapLevelData)));
++        static void Postfix(
++            in BeatmapKey beatmapKey, 
++            BeatmapLevel beatmapLevel, 
++            OverrideEnvironmentSettings overrideEnvironmentSettings, 
++            ColorScheme playerOverrideColorScheme, 
++            bool playerOverrideLightshowColors,
++            ColorScheme beatmapOverrideColorScheme, 
++            GameplayModifiers gameplayModifiers, 
++            PlayerSpecificSettings playerSpecificSettings, 
++            PracticeSettings practiceSettings, 
++            EnvironmentsListModel environmentsListModel) {
++            LevelDataEnhancerPatch.Postfix(beatmapKey, beatmapLevel, overrideEnvironmentSettings, playerOverrideColorScheme, playerOverrideLightshowColors, beatmapOverrideColorScheme, gameplayModifiers, playerSpecificSettings, practiceSettings, environmentsListModel);
++        }
++    }
+ }
+diff --git a/Source/0_Harmony/UIPatches/LocalizationPatches.cs b/Source/0_Harmony/UIPatches/LocalizationPatches.cs
+index 77546db3..3bf18406 100644
+--- a/Source/0_Harmony/UIPatches/LocalizationPatches.cs
++++ b/Source/0_Harmony/UIPatches/LocalizationPatches.cs
+@@ -3,20 +3,22 @@ using JetBrains.Annotations;
+ using TMPro;
+ 
+ namespace BeatLeader {
+-    [HarmonyPatch(typeof(TMP_Text), "set_text")]
+-    public static class SetTextPatch {
++    [HarmonyPatch(typeof(MaterialReferenceManager), "TryGetFontAssetInternal")]
++    public static class TryGetFontAssetPatch {
+         [UsedImplicitly]
+-        private static void Prefix(TMP_Text __instance, ref string value) {
+-            if (value == null) return;
++        private static void Postfix(int hashCode, ref TMP_FontAsset fontAsset, ref bool __result) {
++            if (fontAsset != null) return;
++            __result = BundleLoader.TryGetFontAsset(hashCode, ref fontAsset);
++        }
++    }
+ 
+-            var changeFont = false;
++    [HarmonyPatch(typeof(TMP_Text), "PopulateTextBackingArray", typeof(string))]
++    public static class PreProcessTextPatch {
++        [UsedImplicitly]
++        private static void Prefix(ref string sourceText) {
++            if (sourceText == null) return;
+             while (true) {
+-                if (!ProcessLocalizationTag(ref value)) break;
+-                changeFont = true;
+-            }
+-
+-            if (changeFont) {
+-                __instance.font = BLLocalization.GetLanguageFont();
++                if (!ProcessLocalizationTag(ref sourceText)) break;
+             }
+         }
+ 
+@@ -34,7 +36,7 @@ namespace BeatLeader {
+ 
+             var token = sourceText.Substring(openIndexB, closeIndexA - openIndexB);
+             sourceText = sourceText.Remove(openIndexA, closeIndexB - openIndexA);
+-            sourceText = sourceText.Insert(openIndexA, BLLocalization.GetTranslation(token));
++            sourceText = sourceText.Insert(openIndexA, BLLocalization.GetTranslationWithFont(token));
+             return true;
+         }
+ 
+diff --git a/Source/2_Core/API/Authentication.cs b/Source/2_Core/API/Authentication.cs
+index 560f2621..906cfccd 100644
+--- a/Source/2_Core/API/Authentication.cs
++++ b/Source/2_Core/API/Authentication.cs
+@@ -36,17 +36,10 @@ namespace BeatLeader.API {
+ 
+             var platformUserModel = Resources
+                 .FindObjectsOfTypeAll<PlatformLeaderboardsModel>()
+-                .Select(l => l._platform)
++                .Select(l => l._platformUserModel)
+                 .Last(x => x != null);
+ 
+-            var userInfo = new UserInfo(platformUserModel.key switch {
+-                "steam" => UserInfo.Platform.Steam,
+-                "oculus" => UserInfo.Platform.Oculus,
+-                "oculus-mock" => UserInfo.Platform.Oculus,
+-                "mock" => UserInfo.Platform.Test,
+-                _ => throw new NotImplementedException(),
+-            }, platformUserModel.user.userId.ToString(), platformUserModel.user.displayName);
+-
++            var userInfo = await platformUserModel.GetUserInfo(CancellationToken.None);
+             var tokenProvider = new PlatformAuthenticationTokenProvider(platformUserModel, userInfo);
+ 
+             return Platform switch {
+diff --git a/Source/2_Core/Installers/OnAppInitInstaller.cs b/Source/2_Core/Installers/OnAppInitInstaller.cs
+index 1d0f87fb..aef58f5a 100644
+--- a/Source/2_Core/Installers/OnAppInitInstaller.cs
++++ b/Source/2_Core/Installers/OnAppInitInstaller.cs
+@@ -2,7 +2,8 @@
+ using BeatLeader.DataManager;
+ using BeatLeader.Utils;
+ using JetBrains.Annotations;
+-using OculusStudios.Platform.Core;
++using System.Linq;
++using System.Reflection;
+ using System.Runtime.InteropServices;
+ using Zenject;
+ 
+@@ -11,13 +12,15 @@ namespace BeatLeader.Installers {
+     public class OnAppInitInstaller : Installer<OnAppInitInstaller> {
+         [Inject, UsedImplicitly]
+         private IVRPlatformHelper _vrPlatformHelper = null!;
+-        [Inject, UsedImplicitly]
+-        private IPlatform _platform = null!;
+ 
+         public override void InstallBindings() {
+             Plugin.Log.Debug("OnAppInitInstaller");
+-
+-            if (_platform != null && _platform.vendor == Vendor.Valve) {
++            
++            var steamPlatformUserModel = Assembly.GetAssembly(typeof(IPlatformUserModel))
++                .GetTypes()
++                .FirstOrDefault(t => t.FullName!.Contains("SteamPlatformUserModel"));
++            
++            if (steamPlatformUserModel != null) {
+                 Authentication.SetPlatform(Authentication.AuthPlatform.Steam);
+             } else {
+                 Authentication.SetPlatform(Authentication.AuthPlatform.OculusPC);
+diff --git a/Source/2_Core/Localization/BLLocalization.cs b/Source/2_Core/Localization/BLLocalization.cs
+index 31fe8d95..44365d25 100644
+--- a/Source/2_Core/Localization/BLLocalization.cs
++++ b/Source/2_Core/Localization/BLLocalization.cs
+@@ -1,17 +1,18 @@
+ ﻿using System.Collections.Generic;
+-using System.Linq;
+-using BGLib.Polyglot;
+ using Newtonsoft.Json.Linq;
++using BGLib.Polyglot;
+ using TMPro;
++using UnityEngine;
++using System.Linq;
+ 
+ namespace BeatLeader {
+     public static class BLLocalization {
+         #region Initialize
+ 
+-        private static LocalizationLanguage _baseGameLanguage = LocalizationLanguage.English;
++        private static Language _baseGameLanguage = Language.English;
+ 
+         internal static void Initialize(SettingsManager settingsmanager) {
+-            _baseGameLanguage = Localization.Instance.supportedLanguages.FirstOrDefault(l => l.ToSerializedName() == settingsmanager.settings.misc.language);
++            _baseGameLanguage = Localization.Instance.SupportedLanguages.FirstOrDefault(l => l.ToSerializedName() == settingsmanager.settings.misc.language);
+             OnBaseGameLanguageDidChange();
+         }
+ 
+@@ -26,20 +27,21 @@ namespace BeatLeader {
+         }
+ 
+         private static void OnBaseGameLanguageDidChange() {
++
+             _blLanguageAnalog = _baseGameLanguage switch {
+-                LocalizationLanguage.English => BLLanguage.English,
+-                LocalizationLanguage.Russian => BLLanguage.Russian,
+-                LocalizationLanguage.Japanese => BLLanguage.Japanese,
+-                LocalizationLanguage.Simplified_Chinese => BLLanguage.Chinese,
+-                LocalizationLanguage.Traditional_Chinese => BLLanguage.Chinese,
+-                LocalizationLanguage.Korean => BLLanguage.Korean,
+-                LocalizationLanguage.French => BLLanguage.French,
+-                LocalizationLanguage.German => BLLanguage.German,
+-                LocalizationLanguage.Spanish => BLLanguage.Spanish,
+-                LocalizationLanguage.Norwegian => BLLanguage.Norwegian,
+-                LocalizationLanguage.Polish => BLLanguage.Polish,
+-                LocalizationLanguage.Swedish => BLLanguage.Swedish,
+-                LocalizationLanguage.Italian => BLLanguage.Italian,
++                Language.English => BLLanguage.English,
++                Language.Russian => BLLanguage.Russian,
++                Language.Japanese => BLLanguage.Japanese,
++                Language.Simplified_Chinese => BLLanguage.Chinese,
++                Language.Traditional_Chinese => BLLanguage.Chinese,
++                Language.Korean => BLLanguage.Korean,
++                Language.French => BLLanguage.French,
++                Language.German => BLLanguage.German,
++                Language.Spanish => BLLanguage.Spanish,
++                Language.Norwegian => BLLanguage.Norwegian,
++                Language.Polish => BLLanguage.Polish,
++                Language.Swedish => BLLanguage.Swedish,
++                Language.Italian => BLLanguage.Italian,
+                 _ => BLLanguage.English,
+             };
+         }
+@@ -130,6 +132,25 @@ namespace BeatLeader {
+ 
+         #region Fonts
+ 
++        private static Material _defaultFontMaterial;
++        private static bool _defaultFontInitialized;
++
++        private static void LazyInitDefaultFont(TMP_Text textComponent) {
++            if (_defaultFontInitialized) return;
++            _defaultFontMaterial = textComponent.fontSharedMaterial;
++            _defaultFontInitialized = true;
++        }
++
++        public static void UpdateFontAsset(TMP_Text textComponent) {
++            LazyInitDefaultFont(textComponent);
++
++            var fontAsset = GetLanguageFont();
++            textComponent.font = fontAsset;
++            if (fontAsset == null) {
++                textComponent.fontSharedMaterial = _defaultFontMaterial;
++            }
++        }
++
+         public static TMP_FontAsset? GetLanguageFont() {
+             return GetCurrentLanguage() switch {
+                 BLLanguage.Japanese => BundleLoader.NotoSansJPFontAsset,
+diff --git a/Source/2_Core/Localization/TimeLocalizationUtils.cs b/Source/2_Core/Localization/TimeLocalizationUtils.cs
+index c087e29a..9e4fbd91 100644
+--- a/Source/2_Core/Localization/TimeLocalizationUtils.cs
++++ b/Source/2_Core/Localization/TimeLocalizationUtils.cs
+@@ -11,7 +11,12 @@ namespace BeatLeader {
+         private const int Month = 30 * Day;
+ 
+         public static string GetRelativeTimeStringLocalizedWithFont(TimeSpan timeSpan, bool compact) {
+-            return $"<bll>{GetRelativeTimeStringLocalized(timeSpan, compact)}</bll>";
++            var font = BLLocalization.GetLanguageFont();
++            if (font != null) {
++                return $"<font={font.name}>{GetRelativeTimeStringLocalized(timeSpan, compact)}</font>";
++            }
++
++            return GetRelativeTimeStringLocalized(timeSpan, compact);
+         }
+ 
+         public static string GetRelativeTimeStringLocalized(TimeSpan timeSpan, bool compact) {
+diff --git a/Source/2_Core/Managers/ReplayEnhancer/UserEnhancer.cs b/Source/2_Core/Managers/ReplayEnhancer/UserEnhancer.cs
+index 8d251bcd..5c58851e 100644
+--- a/Source/2_Core/Managers/ReplayEnhancer/UserEnhancer.cs
++++ b/Source/2_Core/Managers/ReplayEnhancer/UserEnhancer.cs
+@@ -2,30 +2,30 @@
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
++using BeatLeader.Models;
+ using BeatLeader.Models.Replay;
+ using IPA.Utilities;
+-using OculusStudios.Platform.Core;
+ using UnityEngine;
+ 
+ namespace BeatLeader.Core.Managers.ReplayEnhancer
+ {
+     class UserEnhancer
+     {
+-        private static readonly FieldAccessor<PlatformLeaderboardsModel, IPlatform>.Accessor AccessPlatformUserModel;
++        private static readonly FieldAccessor<PlatformLeaderboardsModel, IPlatformUserModel>.Accessor AccessPlatformUserModel;
+         private static readonly object getUserLock = new object();
+ 
+         static string userName = null;
+         static string userID = null;
+         static string userPlatform = null;
+ 
+-        private static UserInfo getUserTask;
+-        private static IPlatform _platformUserModel;
++        private static Task<UserInfo> getUserTask;
++        private static IPlatformUserModel _platformUserModel;
+ 
+         static UserEnhancer()
+         {
+             try
+             {
+-                AccessPlatformUserModel = FieldAccessor<PlatformLeaderboardsModel, IPlatform>.GetAccessor("_platform");
++                AccessPlatformUserModel = FieldAccessor<PlatformLeaderboardsModel, IPlatformUserModel>.GetAccessor("_platformUserModel");
+             }
+             catch (Exception ex)
+             {
+@@ -34,30 +34,30 @@ namespace BeatLeader.Core.Managers.ReplayEnhancer
+             }
+         }
+ 
+-        public static void Enhance(Replay replay)
++        public static async void Enhance(Replay replay)
+         {
+-            GetUser();
++            await GetUserAsync();
+             replay.info.playerID = userID;
+             replay.info.platform = userPlatform;
+             replay.info.playerName = userName;
+         }
+ 
+-        public static UserInfo GetUser()
++        public static async Task<UserInfo> GetUserAsync()
+         {
+             try
+             {
+                 lock (getUserLock)
+                 {
+-                    IPlatform platformUserModel = GetPlatformUserModel();
++                    IPlatformUserModel platformUserModel = GetPlatformUserModel();
+                     if (platformUserModel == null)
+                     {
+                         Plugin.Log.Error("IPlatformUserModel not found, cannot update user info.");
+                         return null;
+                     }
+-                    if (getUserTask == null)
+-                        getUserTask = InternalGetUser();
++                    if (getUserTask == null || getUserTask.Status == TaskStatus.Faulted)
++                        getUserTask = InternalGetUserAsync();
+                 }
+-                return getUserTask;
++                return await getUserTask;
+             }
+             catch (Exception ex)
+             {
+@@ -67,16 +67,10 @@ namespace BeatLeader.Core.Managers.ReplayEnhancer
+             }
+         }
+ 
+-        private static UserInfo InternalGetUser()
++        private static async Task<UserInfo> InternalGetUserAsync()
+         {
+-            UserInfo userInfo = new UserInfo(_platformUserModel.key switch {
+-                "steam" => UserInfo.Platform.Steam,
+-                "oculus" => UserInfo.Platform.Oculus,
+-                "oculus-mock" => UserInfo.Platform.Oculus,
+-                "mock" => UserInfo.Platform.Test,
+-                _ => throw new NotImplementedException(),
+-            }, _platformUserModel.user.userId.ToString(), _platformUserModel.user.displayName);
+-
++            CancellationToken cancellationToken = new CancellationToken();
++            UserInfo userInfo = await _platformUserModel.GetUserInfo(cancellationToken);
+             if (userInfo != null)
+             {
+                 Plugin.Log.Debug($"UserInfo found: {userInfo.platformUserId}: {userInfo.userName} on {userInfo.platform}");
+@@ -92,7 +86,7 @@ namespace BeatLeader.Core.Managers.ReplayEnhancer
+             return userInfo;
+         }
+ 
+-        internal static IPlatform GetPlatformUserModel()
++        internal static IPlatformUserModel GetPlatformUserModel()
+         {
+             if (_platformUserModel != null)
+                 return _platformUserModel;
+@@ -100,7 +94,7 @@ namespace BeatLeader.Core.Managers.ReplayEnhancer
+             {
+                 // Need to check for null because there's multiple PlatformLeaderboardsModels (at least sometimes), and one has a null IPlatformUserModel with 'vrmode oculus'
+                 var leaderboardsModel = Resources.FindObjectsOfTypeAll<PlatformLeaderboardsModel>().Where(p => AccessPlatformUserModel(ref p) != null).LastOrDefault();
+-                IPlatform platformUserModel = null;
++                IPlatformUserModel platformUserModel = null;
+                 if (leaderboardsModel == null)
+                 {
+                     Plugin.Log.Error("Could not find a 'PlatformLeaderboardsModel', GetUserInfo unavailable.");
+diff --git a/Source/2_Core/Managers/ReplayRecorder.cs b/Source/2_Core/Managers/ReplayRecorder.cs
+index 85142a60..ce775809 100644
+--- a/Source/2_Core/Managers/ReplayRecorder.cs
++++ b/Source/2_Core/Managers/ReplayRecorder.cs
+@@ -280,7 +280,7 @@ namespace BeatLeader {
+ 
+             var xrRigTransform = new ReeTransform(xrRigOrigin.position, xrRigOrigin.rotation);
+ 
+-            _vrPlatformHelper.GetNodePose(vrController._node, vrController._nodeIndex, out var controllerPos, out var controllerRot);
++            _vrPlatformHelper.GetNodePose(vrController._node, vrController._nodeIdx, out var controllerPos, out var controllerRot);
+             controllerPos = xrRigTransform.LocalToWorldPosition(controllerPos);
+             controllerRot = xrRigTransform.LocalToWorldRotation(controllerRot);
+             var controllerTransform = new ReeTransform(controllerPos, controllerRot);
+diff --git a/Source/2_Core/Replayer/BeatmapTimeController.cs b/Source/2_Core/Replayer/BeatmapTimeController.cs
+index e8c54b6b..95105f38 100644
+--- a/Source/2_Core/Replayer/BeatmapTimeController.cs
++++ b/Source/2_Core/Replayer/BeatmapTimeController.cs
+@@ -22,7 +22,9 @@ namespace BeatLeader.Replayer {
+         [Inject] protected readonly BeatmapCallbacksController.InitData _beatmapCallbacksControllerInitData = null!;
+         [Inject] protected readonly BeatmapCallbacksController _beatmapCallbacksController = null!;
+         [Inject] protected readonly BeatmapCallbacksUpdater _beatmapCallbacksUpdater = null!;
+-        [Inject] protected readonly AudioManager _audioManager = null!;
++
++        [FirstResource, UsedImplicitly]
++        protected readonly AudioManagerSO _audioManager = null!;
+ 
+         #endregion
+ 
+@@ -59,6 +61,7 @@ namespace BeatLeader.Replayer {
+                 NoteCutSoundEffectManagerStartPostfix), ReflectionUtils.StaticFlags));
+ 
+         private void Awake() {
++            this.LoadResources();
+             _beatmapAudioSource = _audioTimeSyncController
+                 .GetField<AudioSource, AudioTimeSyncController>("_audioSource");
+             _spawnedBeatmapObjectControllers = _beatmapObjectManager
+@@ -91,7 +94,7 @@ namespace BeatLeader.Replayer {
+             EarlySongWasRewoundEvent?.Invoke(time);
+ 
+             var wasPausedBeforeRewind = _audioTimeSyncController
+-                .state.Equals(IAudioTimeSource.State.Paused);
++                .state.Equals(AudioTimeSyncController.State.Paused);
+             if (!wasPausedBeforeRewind) _audioTimeSyncController.Pause();
+ 
+             _beatmapCallbacksUpdater.Pause();
+@@ -135,7 +138,7 @@ namespace BeatLeader.Replayer {
+             if (Math.Abs(speedMultiplier - _audioTimeSyncController.timeScale) < 0.001f) return;
+ 
+             var wasPausedBeforeRewind = _audioTimeSyncController
+-                .state.Equals(IAudioTimeSource.State.Paused);
++                .state.Equals(AudioTimeSyncController.State.Paused);
+             if (!wasPausedBeforeRewind) _audioTimeSyncController.Pause();
+ 
+             DespawnAllNoteControllerSounds();
+diff --git a/Source/2_Core/Replayer/Camera/ReplayerCameraController.cs b/Source/2_Core/Replayer/Camera/ReplayerCameraController.cs
+index 157b1de4..9a558219 100644
+--- a/Source/2_Core/Replayer/Camera/ReplayerCameraController.cs
++++ b/Source/2_Core/Replayer/Camera/ReplayerCameraController.cs
+@@ -5,7 +5,6 @@ using UnityEngine;
+ using Zenject;
+ using BeatLeader.Utils;
+ using BeatLeader.Models;
+-using UnityEngine.Rendering.Universal;
+ using UnityEngine.SpatialTracking;
+ 
+ namespace BeatLeader.Replayer {
+@@ -160,9 +159,6 @@ namespace BeatLeader.Replayer {
+             _originalCamera = _smoothCamera._mainCamera;
+             var mainCamera = _originalCamera.GetComponent<Camera>();
+             Camera.depthTextureMode = mainCamera.depthTextureMode;
+-            if (mainCamera.TryGetComponent<UniversalAdditionalCameraData>(out var mainCameraData)) {
+-                Camera.GetUniversalAdditionalCameraData().requiresDepthTexture = mainCameraData.requiresDepthTexture;
+-            }
+             if (!InputUtils.UsesFPFC) {
+                 PatchSmoothCamera();
+             }
+diff --git a/Source/2_Core/Replayer/Emulation/Players/Body/VirtualPlayerGameSabers.cs b/Source/2_Core/Replayer/Emulation/Players/Body/VirtualPlayerGameSabers.cs
+index c5992156..33ad2a56 100644
+--- a/Source/2_Core/Replayer/Emulation/Players/Body/VirtualPlayerGameSabers.cs
++++ b/Source/2_Core/Replayer/Emulation/Players/Body/VirtualPlayerGameSabers.cs
+@@ -18,7 +18,7 @@ namespace BeatLeader.Replayer.Emulation {
+             _rightController = _vrControllersManager.rightHandVRController.transform;
+ 
+             _vrControllersManager.GetComponent<DeactivateVRControllersOnFocusCapture>().enabled = false;
+-            _vrControllersManager.SetupAutoplayForAllControllers();
++            _vrControllersManager.DisableAllVRControllers();
+         }
+ 
+         public void ApplySettings(BasicBodySettings basicBodySettings) {
+diff --git a/Source/2_Core/Replayer/ReplayPauseController.cs b/Source/2_Core/Replayer/ReplayPauseController.cs
+index 8e60f1bc..b253fd69 100644
+--- a/Source/2_Core/Replayer/ReplayPauseController.cs
++++ b/Source/2_Core/Replayer/ReplayPauseController.cs
+@@ -59,6 +59,7 @@ namespace BeatLeader.Replayer {
+             _pauseMenuManager.didPressContinueButtonEvent -= _pauseController.HandlePauseMenuManagerDidPressContinueButton;
+             _pauseMenuManager.didPressRestartButtonEvent -= _pauseController.HandlePauseMenuManagerDidPressRestartButton;
+             _levelStartController.levelDidStartEvent -= _pauseController.HandleLevelDidStart;
++            _levelStartController.levelWillStartIntroEvent -= _pauseController.HandleLevelWillStartIntro;
+         }
+ 
+         #endregion
+diff --git a/Source/2_Core/Replayer/ReplayerLauncher.cs b/Source/2_Core/Replayer/ReplayerLauncher.cs
+index f553502e..ffcd8d02 100644
+--- a/Source/2_Core/Replayer/ReplayerLauncher.cs
++++ b/Source/2_Core/Replayer/ReplayerLauncher.cs
+@@ -102,26 +102,26 @@ namespace BeatLeader.Replayer {
+ 
+             if (transitionData != null) {
+                 transitionData.Init(
+-                    gameMode: "Solo",
+-                    beatmapKey: launchData.BeatmapLevel.Key,
+-                    beatmapLevel: launchData.BeatmapLevel.Level,
+-                    overrideEnvironmentSettings: envSettings,
+-                    playerOverrideColorScheme: playerData.colorSchemesSettings.GetOverrideColorScheme(),
+-                    playerOverrideLightshowColors: playerData.colorSchemesSettings.ShouldOverrideLightshowColors(),
+-                    gameplayModifiers: launchData.Settings.IgnoreModifiers ? CreateDisabledModifiers(replayModifiers) : replayModifiers,
+-                    playerSpecificSettings: playerData.playerSpecificSettings.GetPlayerSettingsByReplay(replay),
+-                    practiceSettings: practiceSettings,
+-                    environmentsListModel: _environmentsListModel,
+-                    audioClipAsyncLoader: _audioClipAsyncLoader,
+-                    settingsManager: _settingsManager,
+-                    beatmapDataLoader: _beatmapDataLoader,
+-                    beatmapLevelsEntitlementModel: _beatmapLevelsEntitlementModel,
+-                    gameplayAdditionalInformation: new GameplayAdditionalInformation(
+-                    backButtonText: "Menu",
+-                    useTestNoteCutSoundEffects: false,
+-                    startPaused: false),
+-                    beatmapLevelsModel: _beatmapLevelsModel,
+-                    beatmapLevelData: null
++                    "Solo",
++                    launchData.BeatmapLevel.Key,
++                    launchData.BeatmapLevel.Level,
++                    envSettings,
++                    playerData.colorSchemesSettings.GetOverrideColorScheme(),
++                    playerData.colorSchemesSettings.ShouldOverrideLightshowColors(),
++                    level.Level.GetColorScheme(level.Key.beatmapCharacteristic, level.Key.difficulty),
++                    launchData.Settings.IgnoreModifiers ? CreateDisabledModifiers(replayModifiers) : replayModifiers,
++                    playerData.playerSpecificSettings.GetPlayerSettingsByReplay(replay),
++                    practiceSettings,
++                    _environmentsListModel,
++                    _audioClipAsyncLoader,
++                    _beatmapDataLoader,
++                    _settingsManager,
++                    "Menu",
++                    _beatmapLevelsModel,
++                    _beatmapLevelsEntitlementModel,
++                    false,
++                    false,
++                    null
+                 );
+             }
+ 
+diff --git a/Source/2_Core/Replayer/Tweaking/Tweaks/AudioTimeSyncControllerTweak.cs b/Source/2_Core/Replayer/Tweaking/Tweaks/AudioTimeSyncControllerTweak.cs
+index 6e37ac11..c3f22822 100644
+--- a/Source/2_Core/Replayer/Tweaking/Tweaks/AudioTimeSyncControllerTweak.cs
++++ b/Source/2_Core/Replayer/Tweaking/Tweaks/AudioTimeSyncControllerTweak.cs
+@@ -20,7 +20,7 @@ namespace BeatLeader.Replayer.Tweaking {
+         }
+ 
+         private static bool AudioTimeSyncControllerUpdatePrefix(AudioTimeSyncController __instance) {
+-            return !__instance.state.Equals(IAudioTimeSource.State.Paused);
++            return !__instance.state.Equals(AudioTimeSyncController.State.Paused);
+         }
+     }
+ }
+diff --git a/Source/3_AssetBundle/BundleLoader.cs b/Source/3_AssetBundle/BundleLoader.cs
+index 2a178f51..5766e2b0 100644
+--- a/Source/3_AssetBundle/BundleLoader.cs
++++ b/Source/3_AssetBundle/BundleLoader.cs
+@@ -356,18 +356,26 @@ namespace BeatLeader {
+         public static TMP_FontAsset NotoSansKRFontAsset;
+         public static TMP_FontAsset MinecraftEnchantmentFontAsset;
+ 
++        private static readonly Dictionary<int, TMP_FontAsset> fontAssetsLookup = new();
++
++        public static bool TryGetFontAsset(int hashCode, ref TMP_FontAsset fontAsset) {
++            if (!fontAssetsLookup.ContainsKey(hashCode)) return false;
++            fontAsset = fontAssetsLookup[hashCode];
++            return true;
++        }
++
+         private static TMP_FontAsset LoadFontAsset(this AssetBundle assetBundle, string name) {
+             var asset = assetBundle.LoadAsset<TMP_FontAsset>(name);
+-            if (asset != null) MaterialReferenceManager.AddFontAsset(asset);
++            if (asset != null) fontAssetsLookup[asset.hashCode] = asset;
+             return asset;
+         }
+ 
+         private static void LoadFonts(AssetBundle assetBundle) {
+-            NotoSansFontAsset = LoadFontAsset(assetBundle, "NotoSans-SemiBold SDF");
+-            NotoSansJPFontAsset = LoadFontAsset(assetBundle, "NotoSansJP-SemiBold SDF");
+-            NotoSansSCFontAsset = LoadFontAsset(assetBundle, "NotoSansSC-SemiBold SDF");
+-            NotoSansKRFontAsset = LoadFontAsset(assetBundle, "NotoSansKR-SemiBold SDF");
+-            MinecraftEnchantmentFontAsset = LoadFontAsset(assetBundle, "minecraft-enchantment SDF");
++            NotoSansFontAsset = assetBundle.LoadFontAsset("NotoSans-SemiBold SDF");
++            NotoSansJPFontAsset = assetBundle.LoadFontAsset("NotoSansJP-SemiBold SDF");
++            NotoSansSCFontAsset = assetBundle.LoadFontAsset("NotoSansSC-SemiBold SDF");
++            NotoSansKRFontAsset = assetBundle.LoadFontAsset("NotoSansKR-SemiBold SDF");
++            MinecraftEnchantmentFontAsset = assetBundle.LoadFontAsset("minecraft-enchantment SDF");
+         }
+ 
+         #endregion
+diff --git a/Source/3_AssetBundle/Replayer/BattleRoyale/BattleRoyaleVRController.cs b/Source/3_AssetBundle/Replayer/BattleRoyale/BattleRoyaleVRController.cs
+index 5164c68d..11c5ec10 100644
+--- a/Source/3_AssetBundle/Replayer/BattleRoyale/BattleRoyaleVRController.cs
++++ b/Source/3_AssetBundle/Replayer/BattleRoyale/BattleRoyaleVRController.cs
+@@ -110,7 +110,7 @@ namespace BeatLeader {
+         private void UpdateMovementData() {
+             var bottomPos = transform.position;
+             var topPos = transform.forward + bottomPos;
+-            _movementData.AddNewData(topPos, bottomPos, TimeHelper.GetShaderTimeValue());
++            _movementData.AddNewData(topPos, bottomPos, TimeHelper.time);
+         }
+ 
+         private static SaberTrailRenderer? TrailRendererPrefab {
+diff --git a/Source/7_Utils/OpenXRAcquirer.cs b/Source/7_Utils/OpenXRAcquirer.cs
+index cb07df08..b9187398 100644
+--- a/Source/7_Utils/OpenXRAcquirer.cs
++++ b/Source/7_Utils/OpenXRAcquirer.cs
+@@ -80,7 +80,7 @@ namespace BeatLeader.Utils {
+         }
+ 
+         private const string DLLName = "openxr_loader";
+-        private const long DLLGetLoaderInstanceFuncPtr = 0x00038610;
++        private const long DLLGetLoaderInstanceFuncPtr = 0x00039480;
+ 
+         public static XrSystemProperties? SystemProperties { get; private set; }
+         public static string? SystemName { get; private set; }
+@@ -138,8 +138,8 @@ namespace BeatLeader.Utils {
+             {
+                 buffer[i] = Marshal.ReadByte(funcAddress, i);
+             }
+-            string result = Convert.ToBase64String(buffer);
+-            if (result != "SIPsKIsNonA=") { return null; }
++            string result = Encoding.ASCII.GetString(buffer);
++            if (result != "H??(eH?") { return null; }
+ 
+             var getLoaderInstanceFunc = Marshal.GetDelegateForFunctionPointer<XrInstanceFuncDelegate>(funcAddress);
+             if (getLoaderInstanceFunc == null) throw new InvalidPointerException(funcAddress);
+diff --git a/Source/7_Utils/Replays/BeatLeaderReplay/ReplayDataUtils.cs b/Source/7_Utils/Replays/BeatLeaderReplay/ReplayDataUtils.cs
+index 4bd0bfbe..ca6e7391 100644
+--- a/Source/7_Utils/Replays/BeatLeaderReplay/ReplayDataUtils.cs
++++ b/Source/7_Utils/Replays/BeatLeaderReplay/ReplayDataUtils.cs
+@@ -186,12 +186,6 @@ namespace BeatLeader.Utils {
+                     case NoteData.ScoringType.ChainLinkArcHead:
+                         scoringPart = ((int)NoteData.ScoringType.ChainLink + 2) * 10000;
+                         break;
+-                    case NoteData.ScoringType.ChainHeadArcHead:
+-                        scoringPart = ((int)NoteData.ScoringType.ArcHead + 2) * 10000;
+-                        break;
+-                    case NoteData.ScoringType.ChainHeadArcHeadArcTail:
+-                        scoringPart = ((int)NoteData.ScoringType.ArcTail + 2) * 10000;
+-                        break;
+                     default:
+                         break;
+                 }
+@@ -199,14 +193,14 @@ namespace BeatLeader.Utils {
+ 
+             // Notes that are both chain and arc head have undefined scoring type priority
+             // Bools are reused for compactness
+-            if (altScoring) {
+-                if (noteData.scoringType == NoteData.ScoringType.ChainHeadArcHead) {
+-                    scoringPart = ((int)NoteData.ScoringType.ChainHead + 2) * 10000;
+-                }
+-
+-                if (noteData.scoringType == NoteData.ScoringType.ChainHeadArcHeadArcTail) {
++            if (legacyScoring) {
++                if (noteData.scoringType == NoteData.ScoringType.ChainHead && noteData.isArcHead) {
+                     scoringPart = ((int)NoteData.ScoringType.ArcHead + 2) * 10000;
+                 }
++            } else if (altScoring) {
++                if (noteData.scoringType == NoteData.ScoringType.ArcHead && noteData.gameplayType == NoteData.GameplayType.BurstSliderHead) {
++                    scoringPart = ((int)NoteData.ScoringType.ChainHead + 2) * 10000;
++                }
+             }
+ 
+             return scoringPart
+diff --git a/Source/8_UI/Components/Reactive/Billboard.cs b/Source/8_UI/Components/Reactive/Billboard.cs
+index cdeb912f..ec2b552f 100644
+--- a/Source/8_UI/Components/Reactive/Billboard.cs
++++ b/Source/8_UI/Components/Reactive/Billboard.cs
+@@ -15,11 +15,11 @@ namespace BeatLeader.UI.Reactive.Components;
+ public class Billboard : ReactiveComponent {
+     #region Public API
+ 
+-    public AnimationDuration AnimationDuration {
+-        get => _outerWidth.Duration;
++    public AnimationTiming AnimationDuration {
++        get => _outerWidth.Timing;
+         set {
+-            _outerWidth.Duration = value;
+-            _innerPosX.Duration = value;
++            _outerWidth.Timing = value;
++            _innerPosX.Timing = value;
+         }
+     }
+ 
+diff --git a/Source/8_UI/Leaderboard/Components/Basic/PlayerAvatar.cs b/Source/8_UI/Leaderboard/Components/Basic/PlayerAvatar.cs
+index 7640e647..d7e2d236 100644
+--- a/Source/8_UI/Leaderboard/Components/Basic/PlayerAvatar.cs
++++ b/Source/8_UI/Leaderboard/Components/Basic/PlayerAvatar.cs
+@@ -63,7 +63,7 @@ namespace BeatLeader.Components {
+         private bool _useSmallMaterialVersion;
+ 
+         protected override void OnInitialize() {
+-            _bufferTexture = new RenderTexture(Width, Height, 0, RenderTextureFormat.Default, 8);
++            _bufferTexture = new RenderTexture(Width, Height, 0, RenderTextureFormat.Default, 10);
+             _bufferTexture.Create();
+         }
+ 
+diff --git a/Source/BeatLeader.csproj b/Source/BeatLeader.csproj
+index cbee42d4..1be89816 100644
+--- a/Source/BeatLeader.csproj
++++ b/Source/BeatLeader.csproj
+@@ -15,21 +15,6 @@
+     <WarningLevel>3</WarningLevel>
+   </PropertyGroup>
+   <ItemGroup>
+-    <Reference Include="BeatSaber.Multiplayer.Core">
+-      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\BeatSaber.Multiplayer.Core.dll</HintPath>
+-      <Private>False</Private>
+-      <SpecificVersion>False</SpecificVersion>
+-    </Reference>
+-    <Reference Include="OculusStudios.Platform.Core">
+-      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\OculusStudios.Platform.Core.dll</HintPath>
+-      <Private>False</Private>
+-      <SpecificVersion>False</SpecificVersion>
+-    </Reference>
+-    <Reference Include="OculusStudios.Platform.Steam">
+-      <HintPath>$(BeatSaberDir)\Beat Saber_Data\Managed\OculusStudios.Platform.Steam.dll</HintPath>
+-      <Private>False</Private>
+-      <SpecificVersion>False</SpecificVersion>
+-    </Reference>
+     <Reference Include="Reactive.BeatSaber">
+       <HintPath>$(BeatSaberDir)\Plugins\Reactive.BeatSaber.dll</HintPath>
+       <Private>False</Private>
+diff --git a/Source/manifest.json b/Source/manifest.json
+index 5761576c..edf3eb20 100644
+--- a/Source/manifest.json
++++ b/Source/manifest.json
+@@ -5,7 +5,7 @@
+   "author": "",
+   "version": "0.10.0",
+   "description": "beatleader.com | In-game leaderboards for custom and OST maps | Score replays | Clans, events, playlists and much more",
+-  "gameVersion": "1.42.0",
++  "gameVersion": "1.40.8",
+   "dependsOn": {
+     "SongCore": "^3.15.2",
+     "LeaderboardCore": "^1.7.0",

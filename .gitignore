@@ -1,0 +1,18 @@
+# Build output / IDE
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+TestResults/
+
+# Local data — NEVER commit (attempts-derived data must not be published, see docs/DECISIONS.md D-007)
+data/
+
+# Python
+training/.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
