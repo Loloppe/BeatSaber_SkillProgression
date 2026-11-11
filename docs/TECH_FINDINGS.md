@@ -107,6 +107,10 @@ v2research\`.
 - **Smoke test 2026-11-10 (user, FPFC):** game loads; BSIPA reports Reactive 2.0.0 + BeatLeader 0.10.0; BeatLeader UI
   works. Only notable exception (`HMUI.CurvedCanvasSettings.Start` NRE) is pre-existing (present in every 2026-11-08
   log with Reactive 1.0.0). Warnings "developed for 1.42.0" for Reactive/Yoga are expected. **Score submission not yet tested.**
+- **Compression libs (2026-11-11):** map downloads unzip with `ZipArchiveEntry.ExtractToFile`, from the BeatMods library
+  mods System.IO.Compression (4.6.57) and System.IO.Compression.FileSystem (4.7.3056, depends on the former), installed
+  to `Libs/`. SongCore references both but doesn't declare them in its manifest, so our manifest declares
+  `"System.IO.Compression.FileSystem": "^4.7.3056"` (pulls in both).
 - **Manifest pitfall (2026-11-10):** SongCore on 1.40.8 reports `3.15.3-bs1.40.8-redux` — a semver *pre-release*,
   which is lower than `3.15.3`. `"SongCore": "^3.15.3"` therefore fails ("missing dependency; ignoring").
   Use `^3.15.2` (as BeatLeader does). Versions with only build metadata (`+bs.1.40.0`, SiraUtil/BSML) are fine.

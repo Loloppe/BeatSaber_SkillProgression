@@ -83,4 +83,6 @@ Outstanding / known gaps:
   Curated maps in Explore (D-045): pipeline, Core, unranked BL import, Explore pool entry — awaiting in-game test.
   One shipped DLL (D-046): Core/Data compiled into the plugin — verified in-game by the user 2026-11-11.
   Mapper names in map rows; Explore centred on Training's difficulty (D-047) — awaiting in-game test.
+  Version 1.0.0: a Release build now writes the complete zip (bin/Release/net48/zip: Plugins/ dll+pdb + UserData
+  model, via the CopyModelToArtifact target before BSMT's zip step); not published — still gated on public Reactive v2 + matching BeatLeader build (D-043).
 - ~~SS/AccSaber map pools (D-023)~~ — done 2026-11-10 (D-041). Postponed: unranked maps in Explore (D-032, D-043: catalogue-wide BL fetch too long). ~~adaptive step sizes~~ done 2026-11-10 (D-042).

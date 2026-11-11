@@ -3,7 +3,7 @@
   "id": "SkillProgression",
   "name": "Skill Progression",
   "author": "SkillProgression",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Data-driven skill progression for Beat Saber, built on BeatLeader, ScoreSaber and AccSaber data.",
   "gameVersion": "1.40.8",
   "dependsOn": {
@@ -11,7 +11,8 @@
     "SiraUtil": "^3.2.1",
     "BeatSaberMarkupLanguage": "^1.12.5",
     "SongCore": "^3.15.2",
-    "Reactive": "^2.0.0"
+    "Reactive": "^2.0.0",
+    "System.IO.Compression.FileSystem": "^4.7.3056"
   },
   "loadAfter": [ "BeatLeader" ]
 }

@@ -39,7 +39,8 @@ what to play next** — based on how thousands of BeatLeader players actually pr
 
 ## Requirements
 
-- Beat Saber **1.40.8** with BSIPA, SiraUtil, BeatSaberMarkupLanguage, SongCore.
+- Beat Saber **1.40.8** with BSIPA, SiraUtil, BeatSaberMarkupLanguage, SongCore, and the System.IO.Compression /
+  System.IO.Compression.FileSystem libraries (used to unzip BeatSaver downloads).
 - An internet connection for BeatLeader / ScoreSaber / AccSaber data and BeatSaver downloads (cached scores are used
   when offline).
 - **BeatLeader** (score source and replay upload).
@@ -79,6 +80,10 @@ installation with the mods above.
    ```
    Building the plugin copies `SkillProgression.dll` to `Plugins/` of the game folder — close the game first. Core and
    Data are compiled into that one DLL; their own projects only serve the tests and the command-line tools.
+3. Release zip: `dotnet build src/SkillProgression.Plugin/SkillProgression.Plugin.csproj -c Release` writes
+   `src/SkillProgression.Plugin/bin/Release/net48/zip/SkillProgression-<version>-bs1.40.8-<commit>.zip` with
+   `Plugins/SkillProgression.dll` (+ `.pdb`) and `UserData/SkillProgression/model.json.gz` (from `data/model/`; the
+   build warns when the model is missing).
 
 The plugin reads its progression model from `UserData/SkillProgression/model.json.gz` (the build copies the local
 `data/model/model.json.gz` there).

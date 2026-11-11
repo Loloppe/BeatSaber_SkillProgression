@@ -11,7 +11,7 @@
     <OutputType>Library</OutputType>
     <AssemblyName>SkillProgression</AssemblyName>
     <RootNamespace>SkillProgression.Plugin</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
     <!-- C# 14 is required by the Reactive v2 source generator (D-002) -->
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
@@ -77,6 +77,15 @@
     </PackageReference>
     <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.2" PrivateAssets="all" />
   </ItemGroup>
+
+  <!-- Release zip (D-043): BSMT zips $(ArtifactDestination) after CopyToArtifactDestination; the model goes in with the
+       plugin so the zip is the complete release (Plugins/ + UserData/SkillProgression/model.json.gz). -->
+  <Target Name="CopyModelToArtifact" AfterTargets="CopyToArtifactDestination" BeforeTargets="BSMT_ZipRelease" Condition="'$(Configuration)' == 'Release'">
+    <Warning Text="data/model/model.json.gz not found: the release zip has no model (build it with training/build_model.py)."
+             Condition="!Exists('$(MSBuildThisFileDirectory)../../data/model/model.json.gz')" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)../../data/model/model.json.gz" DestinationFolder="$(ArtifactDestination)/UserData/SkillProgression"
+          Condition="Exists('$(MSBuildThisFileDirectory)../../data/model/model.json.gz')" />
+  </Target>
 
   <Target Name="CopyModelToGame" AfterTargets="Build" Condition="'$(BeatSaberDir)' != '' And '$(DisableCopyToPlugins)' != 'True'">
     <!-- Dev convenience until model hosting is decided: the locally built model goes to UserData. -->

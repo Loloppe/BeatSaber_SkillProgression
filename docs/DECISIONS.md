@@ -284,7 +284,8 @@ Format: ID — date — decision — rationale. Open questions listed below with
   success. Missing still never lowers the level (D-030).
 
 - **D-043 — 2026-11-10 — Release and unranked maps (user).** Release = a .zip on a GitHub release with everything
-  needed (plugin, `UserData/SkillProgression/model.json.gz`; Core/Data libs no longer separate since D-046), shipped by the user only once Reactive v2 is
+  needed (plugin, `UserData/SkillProgression/model.json.gz`; Core/Data libs no longer separate since D-046; mod
+  dependencies incl. the compression libs are declared in manifest.json, not bundled), shipped by the user only once Reactive v2 is
   public together with a matching BeatLeader build (closes Q-003 and model hosting: the model is bundled, no download).
   Unranked maps in Explore (D-032) postponed: BeatLeader ratings would have to be fetched per song for the whole
   BeatSaver catalogue (one call per song at ~3-4 / s), many hours to more than a day.
