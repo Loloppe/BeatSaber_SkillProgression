@@ -6,9 +6,6 @@ data-driven way to improve.
 Instead of only showing statistics, Skill Progression tells you **where you stand, which style you are building, and
 what to play next** — based on how thousands of BeatLeader players actually progressed.
 
-> Status: in active development. Targets **Beat Saber 1.40.8**. Not released yet: it will ship as a .zip on a GitHub
-> release once its requirements are publicly available (see [Requirements](#requirements)).
-
 ## Features
 
 - **Style mix** — the share of your top plays in each style (Accuracy, Midspeed, High Tech, Speed, Extreme), with the
@@ -17,10 +14,12 @@ what to play next** — based on how thousands of BeatLeader players actually pr
 - **Milestones** — for the style you focus on, your position on a ladder of milestones taken from real player
   trajectories, labelled with the average global rank of players there. Progress counts both kinds of improvement:
   playing harder maps (*push*) and better accuracy on the maps you already play (*polish*).
-- **Next up** — short-term targets ("Next clear target", "Next accuracy target") and a list of maps to play next, with
-  a target accuracy for each. Maps you don't have are downloaded from BeatSaver; every map starts directly. Skip any
-  recommendation; missing a target never costs anything, and a map missed three times moves down the list. Step sizes
-  adapt to how your recent plays went: smaller after fails, larger after a run of reached targets.
+- **Next up** — short-term targets ("Next clear target", or new maps around your level when you already play maps that
+  hard but need more of them; "Next accuracy target", the average accuracy to reach on your top plays and the gain)
+  and a list of maps to play next, with a target accuracy for each. Maps you don't have are downloaded from BeatSaver;
+  every map starts directly. Skip any recommendation; missing a target never costs anything, and a map missed three
+  times moves down the list. Step sizes adapt to how your recent plays went: smaller after fails, larger after a run of
+  reached targets.
 - **Map pools** — recommendations come from BeatLeader, ScoreSaber or AccSaber ranked maps, or any of them (AccSaber
   for the Accuracy style only). Progress is measured the same way whatever the pool.
 - **Self-contained** — opening the plugin from the main menu takes over the menu (with the game's own gameplay setup
@@ -29,27 +28,28 @@ what to play next** — based on how thousands of BeatLeader players actually pr
   accuracy. A slider starts at the difficulty Training works at for the style and goes down to half of it, or a few
   steps harder. Besides the ranked pools, Explore can use **BeatSaver's curated maps** (those
   BeatLeader rates; plays on them don't count toward progression).
-- **To improve tab in Solo** — from Explore's "Improve a score" or "Never played" list, *Open in Solo* opens the game's
-  Solo menu on a new tab (after Favorites and All) with those maps, so you see the leaderboard as usual. The tab updates
-  after every play; Solo clears count as scores right away, before BeatLeader syncs.
+- **Explore lists in Solo** — from Explore's "Improve a score" or "Never played" list, *Open in Solo* downloads the
+  missing maps and opens the game's Solo menu on a new tab (after Favorites and All, named "To improve" or "Never
+  played") with those maps, so you see the leaderboard as usual. Maps open on the recommended difficulty. The tab
+  updates after every play; Solo clears count as scores right away, before BeatLeader syncs.
 - **Achievements & history** — milestones, completed steps, established styles, personal records, consistency,
   comebacks and BeatLeader / ScoreSaber / AccSaber rank and pp/AP thresholds, plus rank and milestone charts.
 - **Platforms panel** — live BeatLeader, ScoreSaber and AccSaber rank and pp/AP.
 - **Start fresh or import** — import your BeatLeader history, or start fresh after a long break; switchable later.
-  After a fresh start, a short calibration (one map at a time) finds your current level on the style you focus on.
+  After a fresh start, a short calibration (one map at a time, starting from the easiest maps of the style and
+  stepping up) finds your current level on the style you focus on. Opening the plugin resyncs your BeatLeader scores.
 - **Safe starts** — a map that needs a mod you don't have (Noodle Extensions, Mapping Extensions, Vivify, …) is not
   started; you get a message naming the missing mods instead.
 
 ## Requirements
 
-- Beat Saber **1.40.8** with BSIPA, SiraUtil, BeatSaberMarkupLanguage, SongCore, and the System.IO.Compression /
+- Beat Saber with BSIPA, SiraUtil, BeatSaberMarkupLanguage, SongCore, and the System.IO.Compression /
   System.IO.Compression.FileSystem libraries (used to unzip BeatSaver downloads).
 - An internet connection for BeatLeader / ScoreSaber / AccSaber data and BeatSaver downloads (cached scores are used
   when offline).
 - **BeatLeader** (score source and replay upload).
-- **Reactive v2** (UI framework, `reactive-platform/reactive-mono`, branch `v2-dev`). On 1.40.8 the public BeatLeader
-  release ships Reactive v1 under the same mod id, so a BeatLeader build using Reactive v2 is currently required —
-  see [`tools/dev-env/README.md`](tools/dev-env/README.md).
+- **Reactive v2** (UI framework, [reactive-platform](https://github.com/reactive-platform)), with a BeatLeader build
+  that uses it — see [`tools/dev-env/README.md`](tools/dev-env/README.md).
 
 ## Repository layout
 
@@ -65,7 +65,7 @@ what to play next** — based on how thousands of BeatLeader players actually pr
 
 ## Building
 
-Requirements: .NET 10 SDK (pinned in `global.json`; needed by the Reactive v2 source generator), a Beat Saber 1.40.8
+Requirements: .NET 10 SDK (pinned in `global.json`; needed by the Reactive v2 source generator), a Beat Saber
 installation with the mods above.
 
 1. Create `src/SkillProgression.Plugin/SkillProgression.Plugin.csproj.user` pointing at your game folder:
@@ -84,7 +84,7 @@ installation with the mods above.
    Building the plugin copies `SkillProgression.dll` to `Plugins/` of the game folder — close the game first. Core and
    Data are compiled into that one DLL; their own projects only serve the tests and the command-line tools.
 3. Release zip: `dotnet build src/SkillProgression.Plugin/SkillProgression.Plugin.csproj -c Release` writes
-   `src/SkillProgression.Plugin/bin/Release/net48/zip/SkillProgression-<version>-bs1.40.8-<commit>.zip` with
+   `src/SkillProgression.Plugin/bin/Release/net48/zip/SkillProgression-<version>-bs<game version>-<commit>.zip` with
    `Plugins/SkillProgression.dll` (+ `.pdb`) and `UserData/SkillProgression/model.json.gz` (from `data/model/`; the
    build warns when the model is missing).
 
@@ -110,7 +110,7 @@ population data is not part of this repository and is never published. After a m
 ## Data stored on your computer
 
 Everything lives in `UserData/SkillProgression/` (a few MB per year): your choices, caches of your BeatLeader scores
-(ranked, and unranked ones once you use Explore's curated maps), a log of plays started from the plugin, achievements
+(ranked, and unranked ones once you use Explore's curated maps), a log of plays started from the plugin, your best Solo menu clears, achievements
 and progression history.
 
 ## Documentation
