@@ -239,7 +239,9 @@ User verdict round 2: correct (High Tech leaning Extreme).
 ### In-game review 1 (2026-11-10) — UI changes made
 Platforms rows aligned (name left / rank centre / pp-AP right, no country); confirm/start screens centred vertically;
 BeatLeader import shows a full-screen progress bar (page progress); Next up rows taller with fixed text heights and
-sized buttons; wording without ':' (renders as a dot in Beat Saber): "Next accuracy target  +0.3%", "Next clear
+sized buttons; wording without ':' (renders as a dot in Beat Saber): "Next accuracy target  +0.3%" (2026-11-11: the
+raw acc-vs-predicted read as "- -0.9%" for a player below prediction → now the average accuracy to reach on the style's
+top plays plus the gain, "Next accuracy target - 95.5% (+0.6%)", user choice), "Next clear
 target  6.92 pass rating"; "Milestone" replaces waypoint; "Average global rank" replaces "players here"; style name
 no longer repeated; milestone progress bar + %; **fresh start / unplayed style recommends starter maps on the easier
 side of the first milestone** (Core `PathAnalyzer.Starter`). Log check: BL recorder starts for plugin plays; quit-time

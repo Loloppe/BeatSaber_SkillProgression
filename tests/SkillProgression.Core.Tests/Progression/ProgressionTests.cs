@@ -177,12 +177,41 @@ public class ProgressionTests
     [Fact]
     public void Dimensions_already_at_the_next_waypoint_are_not_objectives()
     {
-        // Difficulty 9.2 is already past the next waypoint's 9.0: only polish remains.
+        // Difficulty 9.2 is already past the next waypoint's 9.0: no clear-harder-maps objective (D-051 covers pp).
         var played = Enumerable.Range(0, 10).Select(i => Map(10, 9.2, 4, "speed", predictedAcc: 0.95)).ToList();
         var model = SpeedModel(played);
         var catalog = new MapCatalog(model.Maps);
         var progress = PathAnalyzer.Analyze("Speed", played.Select(m => catalog.Rate(Play(m, 0.88))!).ToList(), model, catalog)!;
-        Assert.Equal(ObjectiveKind.Polish, Assert.Single(progress.Objectives).Kind);
+        Assert.DoesNotContain(progress.Objectives, o => o.Kind == ObjectiveKind.Push && !o.AtLevel);
+        Assert.Contains(progress.Objectives, o => o.Kind == ObjectiveKind.Polish);
+    }
+
+    [Fact]
+    public void Difficulty_reached_but_path_pp_behind_recommends_new_maps_at_the_players_level()
+    {
+        // D-051 (fresh start): few plays at 9.2, past the next waypoint's 9.0, but path pp far below its 3000.
+        var played = Enumerable.Range(0, 5).Select(i => Map(10, 9.2, 4, "speed", predictedAcc: 0.95)).ToList();
+        var atLevel = Enumerable.Range(0, 3).Select(i => Map(10, 9.4, 4, "speed")).ToList();
+        var tooHard = Map(11, 10.0, 4, "speed");
+        var tooEasy = Map(9, 8.5, 4, "speed");
+        var model = SpeedModel(played.Concat(atLevel).Concat(new[] { tooHard, tooEasy }));
+        var catalog = new MapCatalog(model.Maps);
+        var best = played.Select(m => catalog.Rate(Play(m, 0.88))!).ToList();
+
+        var progress = PathAnalyzer.Analyze("Speed", best, model, catalog)!;
+
+        Assert.True(progress.State.PathPp < progress.Next!.PathPpLow);
+        var push = progress.Objectives.Single(o => o.Kind == ObjectiveKind.Push);
+        Assert.True(push.AtLevel);
+        Assert.Equal(progress.State.Difficulty, push.TargetValue, 9);
+        Assert.Equal(atLevel.Count, push.Maps.Count);
+        Assert.All(push.Maps, r => Assert.Contains(atLevel, m => m.Hash == r.Map.Hash));
+        var step = TrainingPlanner.Step(push);
+        Assert.True(step.AtLevel);
+        Assert.Equal(progress.State.Difficulty, step.Target, 9);
+        var nextUp = TrainingPlanner.NextUp(progress, Array.Empty<PlayRecord>(), new HashSet<SkillProgression.Core.Maps.MapKey>());
+        Assert.Equal(TrainingPlanner.DefaultNextUpCount, nextUp.Count); // interleaved with polish replays
+        Assert.True(nextUp.Count(n => atLevel.Any(m => m.Hash == n.Recommendation.Map.Hash)) >= 2);
     }
 
     [Fact]

@@ -149,7 +149,9 @@ internal static class Report
                   $"(~rank {next.EquivalentRank:N0}); progress {progress.ProgressToNext:P0}");
             foreach (var o in progress.Objectives)
             {
-                var what = o.Kind == ObjectiveKind.Push
+                var what = o.AtLevel
+                    ? $"PUSH  — new maps at level: {axis} {o.CurrentValue:F2} (path pp {progress.State.PathPp:F0} -> {next.PathPpLow:F0})"
+                    : o.Kind == ObjectiveKind.Push
                     ? $"PUSH  — clear harder maps: {axis} {o.CurrentValue:F2} -> {o.TargetValue:F2}"
                     : $"POLISH — raise accuracy: {o.CurrentValue:+0.0%;-0.0%} -> {o.TargetValue:+0.0%;-0.0%} vs predicted";
                 Console.WriteLine($"     {what}  (gap {o.Gap:F2}, priority {o.Priority:F2})");

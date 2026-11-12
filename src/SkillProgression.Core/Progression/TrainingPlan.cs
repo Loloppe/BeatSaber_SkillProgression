@@ -10,6 +10,8 @@ namespace SkillProgression.Core.Progression
     public sealed class ShortTermStep
     {
         public ObjectiveKind Kind { get; set; }
+        /// <summary>New maps around the current level (D-051): <see cref="Target"/> is that level, not a harder one.</summary>
+        public bool AtLevel { get; set; }
         public double Current { get; set; }
         /// <summary>The step's target (axis rating for push, acc vs predicted for polish).</summary>
         public double Target { get; set; }
@@ -88,6 +90,7 @@ namespace SkillProgression.Core.Progression
             return new ShortTermStep
             {
                 Kind = objective.Kind,
+                AtLevel = objective.AtLevel,
                 Current = objective.CurrentValue,
                 Target = Math.Min(objective.TargetValue, objective.CurrentValue + size),
                 WaypointTarget = objective.TargetValue,

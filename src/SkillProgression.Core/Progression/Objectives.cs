@@ -32,6 +32,11 @@ namespace SkillProgression.Core.Progression
     public sealed class Objective
     {
         public ObjectiveKind Kind { get; set; }
+        /// <summary>
+        /// Push only (D-051): new maps around the player's own level, because path pp (breadth) is what is missing;
+        /// <see cref="CurrentValue"/> = <see cref="TargetValue"/> = the player's difficulty.
+        /// </summary>
+        public bool AtLevel { get; set; }
         /// <summary>Normalised gap to the next waypoint (in path spread units) before the path prior.</summary>
         public double Gap { get; set; }
         /// <summary>Gap weighted by the path's push/polish prior; objectives are ordered by this (D-025).</summary>
@@ -68,6 +73,8 @@ namespace SkillProgression.Core.Progression
         public const double GateTolerance = 0.25;
         /// <summary>Half-width (axis units) of the polish window around the next waypoint's difficulty (D-038).</summary>
         public const double PolishWindow = 0.75;
+        /// <summary>Half-width (axis units) of the new-maps-at-your-level window (D-051).</summary>
+        public const double AtLevelWindow = 0.5;
 
         public static PathProgress? Analyze(string path, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog)
         {
@@ -118,22 +125,26 @@ namespace SkillProgression.Core.Progression
             foreach (var p in bestPlays) played[p.Evidence.Map] = p;
             var popularityKey = $"{path}|{next.Index}";
 
-            var push = new Objective
-            {
-                Kind = ObjectiveKind.Push, Gap = pushGap, Priority = pushGap * 2 * pathModel.PushPrior,
-                CurrentValue = state.Difficulty, TargetValue = nextD, MapCentre = nextD,
-                Maps = Diversify(catalog.Recommendable(path)
-                    .Where(m => !played.ContainsKey(Key(m)) && m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
-                    .Select(m => (map: m, axis: PathRules.Axis(path, m.Ratings[""])))
-                    .Where(x => x.axis >= state.Difficulty - step && x.axis <= nextD + step)
-                    .Select(x => new MapRecommendation
-                    {
-                        Map = Key(x.map), Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars,
-                        TargetAccuracy = x.map.Ratings[""].PredictedAcc + next.AccuracyResidual,
-                        PeerPopularity = x.map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
-                    })
-                    .OrderByDescending(r => r.PeerPopularity).ThenBy(r => Math.Abs(r.AxisRating - nextD)), catalog),
-            };
+            List<MapRecommendation> NewMaps(double low, double high, double centre) => Diversify(catalog.Recommendable(path)
+                .Where(m => !played.ContainsKey(Key(m)) && m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
+                .Select(m => (map: m, axis: PathRules.Axis(path, m.Ratings[""])))
+                .Where(x => x.axis >= low && x.axis <= high)
+                .Select(x => new MapRecommendation
+                {
+                    Map = Key(x.map), Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars,
+                    TargetAccuracy = x.map.Ratings[""].PredictedAcc + next.AccuracyResidual,
+                    PeerPopularity = x.map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
+                })
+                .OrderByDescending(r => r.PeerPopularity).ThenBy(r => Math.Abs(r.AxisRating - centre)), catalog);
+
+            var push = pushGap > 0
+                ? new Objective
+                {
+                    Kind = ObjectiveKind.Push, Gap = pushGap, Priority = pushGap * 2 * pathModel.PushPrior,
+                    CurrentValue = state.Difficulty, TargetValue = nextD, MapCentre = nextD,
+                    Maps = NewMaps(state.Difficulty - step, nextD + step, nextD),
+                }
+                : AtLevel(state, current, next, pathModel, NewMaps);
 
             // D-038: the next waypoint's accuracy is what its players reach on maps of its typical difficulty. A player
             // already above that difficulty polishes around it (easier maps), not at their own harder level, where
@@ -165,8 +176,27 @@ namespace SkillProgression.Core.Progression
             };
 
             // A dimension where the player is already at/above the next waypoint is not an objective.
-            progress.Objectives = new[] { push, polish }.Where(o => o.Gap > 0).OrderByDescending(o => o.Priority).ToList();
+            progress.Objectives = new[] { push, polish }.Where(o => o != null && o.Gap > 0).Select(o => o!)
+                .OrderByDescending(o => o.Priority).ToList();
             return progress;
+        }
+
+        /// <summary>
+        /// D-051: difficulty already at the next waypoint but path pp behind it (typically after a fresh start, or on an
+        /// ungated path): the gap is breadth, so the push objective becomes new maps around the player's own level.
+        /// Gap = share of the pp step still missing (capped at 1). Null when pp is not behind either.
+        /// </summary>
+        private static Objective? AtLevel(PathState state, WaypointModel current, WaypointModel next, PathModel pathModel,
+            Func<double, double, double, List<MapRecommendation>> newMaps)
+        {
+            if (state.PathPp >= next.PathPpLow) return null;
+            var gap = Math.Min(1, (next.PathPpLow - state.PathPp) / Positive(next.PathPpLow - current.PathPpLow));
+            return new Objective
+            {
+                Kind = ObjectiveKind.Push, AtLevel = true, Gap = gap, Priority = gap * 2 * pathModel.PushPrior,
+                CurrentValue = state.Difficulty, TargetValue = state.Difficulty, MapCentre = state.Difficulty,
+                Maps = newMaps(state.Difficulty - AtLevelWindow, state.Difficulty + AtLevelWindow, state.Difficulty),
+            };
         }
 
         /// <summary>

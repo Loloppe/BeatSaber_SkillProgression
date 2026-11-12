@@ -161,7 +161,7 @@ internal class TrainingViewController : ViewController
             _view.Milestone.Value = Format.Milestone(s.Focus, s.Starter);
             _view.HasProgress.Value = s.Focus != null;
             _view.Progress.Value = (float)(s.Focus?.ProgressToNext ?? 0);
-            _view.Steps.Value = Format.Steps(s.FocusPath, s.Steps);
+            _view.Steps.Value = Format.Steps(s.FocusPath, s.Focus?.State, s.Steps);
         }
         _view.NextUp.Value = s.NextUp.Select(n => Format.Row(s.FocusPath, n, MapDownloader.IsDownloaded(n.Recommendation.Map.Hash))).ToList();
         if (s.NextUp.Count == 0)

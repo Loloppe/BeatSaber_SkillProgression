@@ -55,10 +55,16 @@ internal static class Format
         : c.Last.Failed ? "Last map failed - the next one is a bit easier"
         : $"Last map {c.Last.Accuracy:P1}, under the target - the next one is a bit easier";
 
-    public static string Steps(string path, IReadOnlyList<ShortTermStep> steps) =>
+    /// <summary>
+    /// Polish steps are in acc vs predicted; shown as the average accuracy to reach on the style's top plays (same
+    /// weights, so a residual gain is the same accuracy gain) plus the gain, e.g. "95.5% (+0.6%)" (user, 2026-11-11).
+    /// </summary>
+    public static string Steps(string path, PathState? state, IReadOnlyList<ShortTermStep> steps) =>
         string.Join("        ", steps.Select(s => s.Kind == ObjectiveKind.Push
-            ? $"Next clear target - {s.Target:F2} {AxisLong(path)}"
-            : $"Next accuracy target - {s.Target:+0.0%;-0.0%}"));
+            ? s.AtLevel ? $"Next clear target - new maps around {s.Target:F2} {AxisLong(path)}"
+            : $"Next clear target - {s.Target:F2} {AxisLong(path)}"
+            : state == null ? $"Next accuracy target - {s.Target - s.Current:+0.0%} average accuracy"
+            : $"Next accuracy target - {Math.Min(1, state.Accuracy + s.Target - s.Current):P1} ({s.Target - s.Current:+0.0%})"));
 
     public static ExploreRow ExploreRow(string path, ExploreItem i, bool downloaded)
     {

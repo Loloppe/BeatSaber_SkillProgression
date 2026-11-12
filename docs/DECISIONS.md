@@ -365,6 +365,15 @@ Format: ID — date — decision — rationale. Open questions listed below with
   Quit doesn't count, skipping a map picks another at the same level, "Skip calibration" → 85% of the old level.
   state.json v3 clears existing picks so running calibrations restart from the bottom. Result line after a calibration
   map says it counted and which way calibration moves (no more "Try again or skip": the map is replaced).
+- **D-051 — 2026-11-11 — "New maps at your level" when only path pp is behind (user choice, option 1 of 3).**
+  After a fresh start the user had 5 Midspeed clears at ~6.0 pass: milestone 1/8 by path pp, but already past
+  milestone 2's typical difficulty (5.09), so the push gap was 0 and the push objective (all new maps) disappeared;
+  Next up held a single polish replay. Now, when difficulty is at the next waypoint but path pp is below it, the push
+  objective becomes `AtLevel`: unplayed maps within ±0.5 (`PathAnalyzer.AtLevelWindow`) of the player's difficulty,
+  ranked by peers at the next waypoint, gap = missing share of the pp step (capped at 1), priority as push. Header:
+  "Next clear target - new maps around 6.04 pass rating". Rejected: topping up short lists with new maps (hides the
+  reason) and keeping starter maps after a fresh start (fixes only that case). Same session: the accuracy step is shown
+  as the average accuracy to reach on the style's top plays plus the gain ("95.5% (+0.6%)"), not acc vs predicted.
   In-game fixes (user, same day): after a Solo play the list's missing maps **are** downloaded (SongCore's refresh keeps
   the selected tab, verified in its source) and the tab re-shows; tab row widened so the 5th tab is clickable; the list
   is shown like Favorites (no pack cover / header / "Buy" panel, order kept). Difficulty (user choice: auto-select

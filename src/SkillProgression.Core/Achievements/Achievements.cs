@@ -135,7 +135,7 @@ namespace SkillProgression.Core.Achievements
             foreach (var kv in report.Paths)
             {
                 var p = kv.Value;
-                var push = p.Objectives.FirstOrDefault(o => o.Kind == ObjectiveKind.Push);
+                var push = p.Objectives.FirstOrDefault(o => o.Kind == ObjectiveKind.Push && !o.AtLevel);
                 var polish = p.Objectives.FirstOrDefault(o => o.Kind == ObjectiveKind.Polish);
                 s.Paths[kv.Key] = new PathSnapshot
                 {

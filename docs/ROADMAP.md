@@ -88,5 +88,7 @@ Outstanding / known gaps:
   Clipped long titles; resync on plugin open; Solo tab for Explore lists (Improve / Never played) with Solo plays as
   scores, after-play downloads and recommended-difficulty preselect (D-049) — verified in-game by the user 2026-11-11.
   Calibration starts at the bottom of the style pool with growing steps, up to 7 maps (D-050); calibration-specific
-  result line instead of "Try again or skip" — awaiting in-game test.
+  result line instead of "Try again or skip" — calibration verified in-game by the user 2026-11-11. Follow-ups from
+  that test: accuracy step shown as "95.5% (+0.6%)" instead of "- -0.9%" vs predicted; "new maps at your level"
+  objective when only path pp is behind (D-051, a fresh start left Next up with one map) — awaiting in-game test.
 - ~~SS/AccSaber map pools (D-023)~~ — done 2026-11-10 (D-041). Postponed: unranked maps in Explore (D-032, D-043: catalogue-wide BL fetch too long). ~~adaptive step sizes~~ done 2026-11-10 (D-042).
