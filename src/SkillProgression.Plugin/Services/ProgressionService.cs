@@ -362,7 +362,7 @@ internal sealed class ProgressionService
         if (!_engine!.Analyze(evidence, new[] { path }).Paths.TryGetValue(path, out var old)) return null;
         var oldLevel = old.State.Difficulty;
         if (State.Calibrations.TryGetValue(path, out var c) && c.Skipped) return Calibrator.CautiousLevel(oldLevel);
-        var status = Calibrator.Status(oldLevel, State.CalibrationPicks(path), log);
+        var status = Calibrator.Status(oldLevel, Calibrator.Bottom(path, _model!, _engine.Catalog) ?? 0, State.CalibrationPicks(path), log);
         return status.Done ? status.Estimate : status.Level;
     }
 
@@ -408,7 +408,8 @@ internal sealed class ProgressionService
         // Only from the start: a style that already has progress since the fresh start doesn't need it.
         if (skipped || (picks.Count == 0 && report.Paths.ContainsKey(focus))) return (null, Calibrator.CautiousLevel(oldLevel));
 
-        var status = Calibrator.Status(oldLevel, picks, log);
+        var bottom = Calibrator.Bottom(focus, _model!, _engine.Catalog) ?? 0;
+        var status = Calibrator.Status(oldLevel, bottom, picks, log);
         if (status.Done) return (null, status.Estimate);
         if (status.Current == null)
         {
@@ -418,7 +419,7 @@ internal sealed class ProgressionService
             if (pick == null) return (null, Calibrator.CautiousLevel(oldLevel));
             State.AddCalibrationPick(focus, pick);
             SaveState();
-            status = Calibrator.Status(oldLevel, State.CalibrationPicks(focus), log);
+            status = Calibrator.Status(oldLevel, bottom, State.CalibrationPicks(focus), log);
         }
         return (status, null);
     }

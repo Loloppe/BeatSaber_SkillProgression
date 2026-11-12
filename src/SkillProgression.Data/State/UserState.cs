@@ -54,7 +54,7 @@ namespace SkillProgression.Data.State
     public sealed class UserState
     {
         public int Version { get; set; } = CurrentVersion;
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
         public string PlayerId { get; set; } = "";
         public StartMode StartMode { get; set; } = StartMode.Unset;
         public DateTime? FreshStartUtc { get; set; }
@@ -128,6 +128,12 @@ namespace SkillProgression.Data.State
                     // v2: the pool default became "Any ranked"; v1 files only ever held the old BeatLeader default.
                     state.MapPool = MapPool.AnyRanked;
                     state.Version = 2;
+                }
+                if (state.Version < 3)
+                {
+                    // v3: calibration starts at the bottom of the pool (D-050); picks from the old 85% start would keep it there.
+                    foreach (var c in state.Calibrations.Values) c.Picks.Clear();
+                    state.Version = 3;
                 }
                 return state;
             }

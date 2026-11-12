@@ -87,4 +87,6 @@ Outstanding / known gaps:
   model, via the CopyModelToArtifact target before BSMT's zip step); not published — still gated on public Reactive v2 + matching BeatLeader build (D-043).
   Clipped long titles; resync on plugin open; Solo tab for Explore lists (Improve / Never played) with Solo plays as
   scores, after-play downloads and recommended-difficulty preselect (D-049) — verified in-game by the user 2026-11-11.
+  Calibration starts at the bottom of the style pool with growing steps, up to 7 maps (D-050); calibration-specific
+  result line instead of "Try again or skip" — awaiting in-game test.
 - ~~SS/AccSaber map pools (D-023)~~ — done 2026-11-10 (D-041). Postponed: unranked maps in Explore (D-032, D-043: catalogue-wide BL fetch too long). ~~adaptive step sizes~~ done 2026-11-10 (D-042).

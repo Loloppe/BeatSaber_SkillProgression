@@ -42,22 +42,33 @@ namespace SkillProgression.Core.Progression
     }
 
     /// <summary>
-    /// Fresh-start calibration (D-010, D-040): an adaptive staircase on the path axis, one map at a time. Starts below the
-    /// old level, steps up after a success (clear at the target accuracy) and down after a miss, halving the step at each
-    /// change of direction. Stops after <see cref="MaxMaps"/> results or once the step is small.
+    /// Fresh-start calibration (D-010, D-040, D-050): an adaptive staircase on the path axis, one map at a time, between the
+    /// easiest map of the pool and the old level (the "range"). Starts at the bottom; steps up after a success (clear at the
+    /// target accuracy), doubling the step while nothing was missed, and down after a miss, halving the step at each change
+    /// of direction. Never goes outside the range. Stops after <see cref="MaxMaps"/> results, once the step is small, on a
+    /// miss at the bottom or on a success at the old level.
     /// </summary>
     public static class Calibrator
     {
-        public const int MaxMaps = 5;
-        /// <summary>First pick at this share of the old level (slightly below, D-010).</summary>
-        public const double StartShare = 0.85;
-        /// <summary>First step as a share of the old level.</summary>
-        public const double StepShare = 0.10;
-        /// <summary>Stop early once the step is below this share of the old level.</summary>
-        public const double MinStepShare = 0.025;
+        public const int MaxMaps = 7;
+        /// <summary>First step up as a share of the range (then 1/4, 1/2... while every map succeeds).</summary>
+        public const double FirstStepShare = 0.125;
+        /// <summary>Stop early once the step is below this share of the range (after a miss).</summary>
+        public const double MinStepShare = 0.1;
+        /// <summary>Level used when calibration is skipped (D-040): slightly below the old level.</summary>
+        public const double CautiousShare = 0.85;
 
-        /// <summary>Level to start from when calibration is skipped: the cautious first-pick level.</summary>
-        public static double CautiousLevel(double oldLevel) => oldLevel * StartShare;
+        /// <summary>Level to start from when calibration is skipped: a cautious share of the old level.</summary>
+        public static double CautiousLevel(double oldLevel) => oldLevel * CautiousShare;
+
+        /// <summary>Axis level of the easiest map calibration can pick on the path (current pool); null without maps.</summary>
+        public static double? Bottom(string path, ModelFile model, MapCatalog catalog)
+        {
+            var axes = catalog.Recommendable(path)
+                .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
+                .Select(m => PathRules.Axis(path, m.Ratings[""])).ToList();
+            return axes.Count == 0 ? (double?)null : axes.Min();
+        }
 
         public static List<CalibrationResult> Results(IEnumerable<CalibrationPick> picks, IReadOnlyCollection<PlayRecord> log)
         {
@@ -81,20 +92,32 @@ namespace SkillProgression.Core.Progression
             return results;
         }
 
-        public static CalibrationStatus Status(double oldLevel, IReadOnlyList<CalibrationPick> picks, IReadOnlyCollection<PlayRecord> log)
+        /// <param name="bottom">Easiest map's level (<see cref="Bottom"/>); the first pick's level once there is one, so a
+        /// pool change mid-calibration doesn't move the range.</param>
+        public static CalibrationStatus Status(double oldLevel, double bottom, IReadOnlyList<CalibrationPick> picks, IReadOnlyCollection<PlayRecord> log)
         {
             var results = Results(picks, log);
-            var level = oldLevel * StartShare;
-            var step = oldLevel * StepShare;
+            var start = picks.Count > 0 ? picks[0].Axis : bottom;
+            var range = oldLevel - start;
+            if (range <= 0) // the old level is at the bottom of the pool: nothing to calibrate
+                return new CalibrationStatus { Done = true, Level = start, Estimate = Math.Max(0, start), Last = results.LastOrDefault() };
+
+            var level = start;
+            var step = range * FirstStepShare;
             var lastDirection = 0;
+            var missed = false;
+            var edge = false; // missed at the bottom or succeeded at the old level: no point going on
             foreach (var r in results)
             {
                 var direction = r.Success ? 1 : -1;
                 if (lastDirection != 0 && direction != lastDirection) step /= 2;
-                level += direction * step;
+                else if (direction == 1 && lastDirection == 1 && !missed) step *= 2;
+                edge = direction == 1 ? level >= oldLevel : level <= start;
+                level = Math.Max(start, Math.Min(oldLevel, level + direction * step));
+                missed |= direction == -1;
                 lastDirection = direction;
             }
-            var done = results.Count >= MaxMaps || (results.Count >= 2 && step < oldLevel * MinStepShare);
+            var done = results.Count >= MaxMaps || edge || (missed && step < range * MinStepShare);
             return new CalibrationStatus
             {
                 Done = done,

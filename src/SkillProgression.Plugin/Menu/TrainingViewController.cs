@@ -246,7 +246,8 @@ internal class TrainingViewController : ViewController
                 _view.Status.Value = "Starting";
             }
 
-            var error = _launcher.Start(row.Map, record => OnLevelFinished(item, record), item.TargetAccuracy);
+            var calibrating = _snapshot.Calibration != null;
+            var error = _launcher.Start(row.Map, record => OnLevelFinished(item, record, calibrating), item.TargetAccuracy);
             if (error != null)
             {
                 _view.Status.Value = error;
@@ -270,13 +271,14 @@ internal class TrainingViewController : ViewController
         _view.NextUp.Value = s.NextUp.Select(n => Format.Row(s.FocusPath, n, MapDownloader.IsDownloaded(n.Recommendation.Map.Hash))).ToList();
     }
 
-    private async void OnLevelFinished(NextUpItem item, PlayRecord? record)
+    private async void OnLevelFinished(NextUpItem item, PlayRecord? record, bool calibrating)
     {
         if (_view == null) return;
         _view.Busy.Value = false;
-        _view.Status.Value = Format.Result(item, record);
+        var result = calibrating ? Format.CalibrationResult(item, record) : Format.Result(item, record);
+        _view.Status.Value = result;
         try { await RefreshAsync(sync: false); }
         catch (Exception e) { Plugin.Log.Error(e); }
-        _view.Status.Value = Format.Result(item, record) + Format.Unlocks(_snapshot?.NewAchievements); // refresh may overwrite the line
+        _view.Status.Value = result + Format.Unlocks(_snapshot?.NewAchievements); // refresh may overwrite the line
     }
 }

@@ -256,7 +256,7 @@ Format: ID — date — decision — rationale. Open questions listed below with
 
 - **D-040 — 2026-11-10 — Fresh-start calibration = adaptive, one map at a time (implements D-010; user choice).**
   After a fresh start, a style with an old level (from the full BeatLeader history) and no progress since the fresh
-  start is calibrated when focused: Next up shows one map, first at 85% of the old level on the style's axis; a success
+  start is calibrated when focused: Next up shows one map, first at 85% of the old level on the style's axis (start and steps revised by D-050); a success
   (pass, not a No Fail soft fail, at the target = predicted acc + nearest waypoint's residual) steps up, a miss steps
   down, first step 10% of the old level, halved at each change of direction; ends after 5 maps or once the step is
   under 2.5%. The estimate is capped at the old level (recovery ceiling). Afterwards, starter maps aim at the estimate
@@ -354,6 +354,17 @@ Format: ID — date — decision — rationale. Open questions listed below with
   in **Never played**; the tab follows the mode Explore showed (label/pack "To improve" or "Never played", saved as
   `ToImprove.Mode`). Never played maps are downloaded when the button is pressed, not after plays (a SongCore refresh in
   the Solo menu could reset it), so that list shrinks as maps get played until the button is pressed again.
+
+- **D-050 — 2026-11-11 — Calibration starts at the bottom of the style pool (revises D-040; user, after a real comeback).**
+  Starting at 85% of the old level was far too hard after a long break. Calibration now runs between the easiest
+  recommendable map of the style in the current pool (`Calibrator.Bottom`; the first pick's level once picked, so a pool
+  change mid-calibration doesn't move it) and the old level ("range"). Growing steps (user choice over fixed steps or
+  a lower share): first step 1/8 of the range, doubled after each success until the first miss, then halved at each change
+  of direction; the level stays inside the range. Ends after 7 maps, once the step is under 10% of the range after a miss,
+  on a miss at the bottom or on a success at the old level. Unchanged: target = predicted acc + waypoint residual, a
+  Quit doesn't count, skipping a map picks another at the same level, "Skip calibration" → 85% of the old level.
+  state.json v3 clears existing picks so running calibrations restart from the bottom. Result line after a calibration
+  map says it counted and which way calibration moves (no more "Try again or skip": the map is replaced).
   In-game fixes (user, same day): after a Solo play the list's missing maps **are** downloaded (SongCore's refresh keeps
   the selected tab, verified in its source) and the tab re-shows; tab row widened so the 5th tab is clickable; the list
   is shown like Favorites (no pack cover / header / "Buy" panel, order kept). Difficulty (user choice: auto-select

@@ -64,9 +64,25 @@ public sealed class StateAndCacheTests : IDisposable
         File.WriteAllText(path, """{"Version":1,"MapPool":"BeatLeader","FocusPath":"Speed"}""");
         var loaded = new UserStateStore(path).Load();
         Assert.Equal(SkillProgression.Core.Model.MapPool.AnyRanked, loaded.MapPool);
-        Assert.Equal(2, loaded.Version);
+        Assert.Equal(UserState.CurrentVersion, loaded.Version);
         Assert.Equal("Speed", loaded.FocusPath);
         Assert.Equal(SkillProgression.Core.Model.MapPool.AnyRanked, new UserState().MapPool);
+    }
+
+    [Fact]
+    public void Version_2_state_restarts_calibration_but_keeps_it_skipped()
+    {
+        Directory.CreateDirectory(_dir);
+        var path = Path.Combine(_dir, "state.json");
+        File.WriteAllText(path, """
+            {"Version":2,"Calibrations":{
+              "Speed":{"Picks":[{"Map":"ABC/Standard/Expert","Axis":8.5,"TargetAccuracy":0.95,"PickedUtc":"2026-11-10T00:00:00Z"}]},
+              "Tech":{"Skipped":true}}}
+            """);
+        var loaded = new UserStateStore(path).Load();
+        Assert.Equal(3, loaded.Version);
+        Assert.Empty(loaded.CalibrationPicks("Speed"));
+        Assert.True(loaded.Calibrations["Tech"].Skipped);
     }
 
     [Fact]

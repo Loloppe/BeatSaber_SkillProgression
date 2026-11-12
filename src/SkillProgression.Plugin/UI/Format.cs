@@ -50,7 +50,7 @@ internal static class Format
 
     /// <summary>What the last calibration map said, and where the next one goes.</summary>
     public static string CalibrationLast(CalibrationStatus c) =>
-        c.Last == null ? "Starting a little below your old level"
+        c.Last == null ? "Starting with the easiest maps of the pool"
         : c.Last.Success ? $"Last map cleared at {c.Last.Accuracy:P1} - the next one is a bit harder"
         : c.Last.Failed ? "Last map failed - the next one is a bit easier"
         : $"Last map {c.Last.Accuracy:P1}, under the target - the next one is a bit easier";
@@ -133,6 +133,18 @@ internal static class Format
         return delta >= 0
             ? $"{record.Accuracy:P2} - target {item.TargetAccuracy:P1} reached ✓"
             : $"{record.Accuracy:P2} - target {item.TargetAccuracy:P1} ({delta:+0.0%;-0.0%}). Try again or skip.";
+    }
+
+    /// <summary>Result of a calibration map (D-040): the first clear or fail counts and the map is replaced, so no retry.</summary>
+    public static string CalibrationResult(NextUpItem item, PlayRecord? record)
+    {
+        if (record == null) return "Back from the level.";
+        if (record.Outcome == PlayOutcome.Quit) return "Quit - not counted, the calibration map is still waiting.";
+        if (record.Outcome == PlayOutcome.Failed || record.SoftFailed) return "Failed - counted, calibration steps down to easier maps.";
+        var delta = record.Accuracy - item.TargetAccuracy;
+        return delta >= 0
+            ? $"{record.Accuracy:P2} - target {item.TargetAccuracy:P1} reached ✓ - calibration steps up."
+            : $"{record.Accuracy:P2} - target {item.TargetAccuracy:P1} ({delta:+0.0%;-0.0%}) - counted, calibration steps down.";
     }
 
     /// <summary>User format: [E] Easy, [N] Normal, [H] Hard, [Ex] Expert, [Ex+] Expert+.</summary>
