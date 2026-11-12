@@ -64,6 +64,11 @@ internal class LevelLauncher
         if (!BeatLeaderInterop.PrepareRecording())
             Plugin.Log.Info("Starting without BeatLeader recording.");
 
+        // The game's LevelStatsView creates this entry when a difficulty is selected; we skip that view, and mods
+        // reading it with TryGetPlayerLevelStatsData at level start (e.g. FCPercentage's tracker) silently disable
+        // themselves on never-played maps when it's missing.
+        _playerDataModel.playerData.GetOrCreatePlayerLevelStatsData(in key);
+
         _session.Begin(_gameplaySetup.gameplayModifiers.noFailOn0Energy);
         _menuTransitionsHelper.StartStandardLevel(
             gameMode: "Solo",

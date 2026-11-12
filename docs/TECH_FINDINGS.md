@@ -153,3 +153,8 @@ v2research\`.
   HMUI `ImageView`, which ignores Unity's `Image.Type.Filled` / `fillAmount` → resize a child for progress bars.
   (3) Generated `s`-bindings only exist inside `Construct` or `[StateGen]` members, and need concrete state types.
   (4) `WithRectExpand()` (namespace `Reactive`) makes a root view fill its ViewController.
+- **Level stats entry before launch (2026-11-11):** vanilla `LevelStatsView` calls `GetOrCreatePlayerLevelStatsData` when a
+  difficulty is selected, so an entry always exists at level start. Mods that read it with `TryGetPlayerLevelStatsData` in
+  GameCore (FCPercentage 1.4.9's `ScoreTracker`) silently skip subscribing when it's null → counter frozen at 100% on
+  never-played maps launched from our UI. `LevelLauncher.Start` now creates the entry before `StartStandardLevel`.
+  FCPercentage's results-screen texts hook `ResultsViewController`, which our flow doesn't show (by design).
