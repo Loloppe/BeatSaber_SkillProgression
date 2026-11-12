@@ -21,6 +21,7 @@
   <ItemGroup>
     <EmbeddedResource Include="manifest.json" />
     <EmbeddedResource Include="Resources/to-improve.png" />
+    <EmbeddedResource Include="Resources/icon.png" />
     <None Include="SkillProgression.Plugin.csproj.user" Condition="Exists('SkillProgression.Plugin.csproj.user')" />
   </ItemGroup>
 
