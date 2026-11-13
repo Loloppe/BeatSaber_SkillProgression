@@ -28,15 +28,14 @@ namespace SkillProgression.Core.Profiles
 
         /// <summary>
         /// Assigns each top play to exactly one style (Extreme, Accuracy, High Tech, Midspeed, Speed — in that order)
-        /// using pass/tech ratings (D-020/D-021) and effective stars for Extreme. A map also counts as High Tech when
-        /// BeatLeader's own tagger calls it "tech": the per-map ratio rule alone undercounted tech for players the user
-        /// identifies as High Tech (review round 3: rank 1 came out Speed-first).
+        /// using pass/tech ratings (D-020/D-021) and effective stars for Extreme — the same tech rule as the paths.
+        /// BeatLeader's "tech" tag is not used: the maps it adds are mostly fast speed/extreme maps (D-053).
         /// </summary>
-        public static string StyleOf(MapRatings r, DestinationThresholds t, string mapType = "")
+        public static string StyleOf(MapRatings r, DestinationThresholds t)
         {
             if (r.Stars >= t.ExtremeStars) return Destinations.Extreme;
             if (r.Pass <= t.LowPass) return Destinations.Accuracy;
-            if ((r.Tech >= t.TechRatio * r.Pass && r.Tech >= t.TechMin) || mapType == "tech") return Destinations.HighTech;
+            if (r.Tech >= t.TechRatio * r.Pass && r.Tech >= t.TechMin) return Destinations.HighTech;
             return r.Pass <= t.MidPass ? Destinations.Midspeed : Destinations.Speed;
         }
 
@@ -49,7 +48,7 @@ namespace SkillProgression.Core.Profiles
             var total = top.Sum(p => p.Pp);
             if (total <= 0) return mix;
 
-            var groups = top.GroupBy(p => StyleOf(p.Ratings, t, p.Map.MapType)).ToDictionary(g => g.Key, g => g.ToList());
+            var groups = top.GroupBy(p => StyleOf(p.Ratings, t)).ToDictionary(g => g.Key, g => g.ToList());
             foreach (var g in groups) mix.Shares[g.Key] = g.Value.Sum(p => p.Pp) / total;
 
             var ceiling = Stats.Quantile(best.Where(p => p.Pp > 0).Select(p => p.Ratings.Pass).ToArray(), 0.95);

@@ -27,6 +27,15 @@ public class StyleMixTests
         Assert.Equal(style, StyleMixCalculator.StyleOf(new MapRatings { Stars = stars, Pass = pass, Tech = tech }, Rules));
 
     [Fact]
+    public void A_fast_map_tagged_tech_by_BeatLeader_is_not_High_Tech()
+    {
+        // D-053: the tag mostly marks fast speed/extreme maps; only the ratings decide (pass 12, tech 9 < 0.8 x pass)
+        var mix = Mix((30, () => Map(12.5, 12, 9, "tech", predictedAcc: 0.95), 0.94));
+        Assert.Equal(1.0, mix.Shares["Speed"], 9);
+        Assert.Equal(0.0, mix.Shares["High Tech"], 9);
+    }
+
+    [Fact]
     public void Shares_partition_the_top_play_pp()
     {
         var mix = Mix((15, () => Map(4, 2, 3, "acc", predictedAcc: 0.98), 0.985),

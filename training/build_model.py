@@ -95,6 +95,13 @@ TYPE_BITS = [(1, "acc"), (2, "tech"), (4, "midspeed"), (8, "speed")]
 KNN_CURVES = 5
 
 
+def has_ratings(ratings):
+    """BeatLeader sometimes rates a map's stars and acc but not pass/tech (all 0): such a map fits no style, so it is
+    left out of the model (user, 2026-11-13)."""
+    r = ratings.get("")
+    return r is not None and all(r[k] > 0 for k in ("Stars", "Pass", "Acc", "Tech"))
+
+
 def pool_maps(maps):
     """D-041: ScoreSaber / AccSaber ranked maps that aren't BeatLeader-ranked, with BeatLeader's own ratings
     (fetch_pool_ratings.py). They have no population scores, so each speed version gets the mean acc -> pp curve of
@@ -121,7 +128,7 @@ def pool_maps(maps):
     known = {(m["Hash"], m["Difficulty"]) for m in maps}
     extra = []
     for p in json.load(open(path, encoding="utf-8")):
-        if (p["Hash"], p["Difficulty"]) in known:
+        if (p["Hash"], p["Difficulty"]) in known or not has_ratings(p["Ratings"]):
             continue
         extra.append({
             "Hash": p["Hash"], "Characteristic": "Standard", "Difficulty": p["Difficulty"], "Name": p["Name"],
@@ -147,6 +154,8 @@ def curated_maps(maps):
         known = by_key.get((c["Hash"], c["Difficulty"]))
         if known is not None:
             known["Curated"], known["BeatSaverScore"] = True, c["BeatSaverScore"]
+            continue
+        if not has_ratings(c["Ratings"]):
             continue
         entry = {
             "Hash": c["Hash"], "Characteristic": "Standard", "Difficulty": c["Difficulty"], "Name": c["Name"],

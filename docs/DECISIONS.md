@@ -158,7 +158,7 @@ Format: ID — date — decision — rationale. Open questions listed below with
 
 - **D-028 — 2026-11-10 — Style mix replaces the single "arrived" label; rank-milestone waypoints.** User approved.
   Player header = share of top-30 pp per style (each play in exactly one style: Extreme ≥13★ eff., Accuracy pass ≤3,
-  High Tech = tech-led or BL-tagged "tech", Midspeed pass ≤8, Speed otherwise) with **established** styles marked
+  High Tech = tech-led or BL-tagged "tech" (tag dropped by D-053), Midspeed pass ≤8, Speed otherwise) with **established** styles marked
   (share ≥25%, Extreme ≥40%, plus that destination's criteria on those plays). "Arrived" no longer shown: it read as
   "reached the top". Waypoints cut at equivalent-rank milestones (40k … 25/10) — finer near the top. Extreme path only
   counts maps ≥10★ effective.
@@ -379,6 +379,19 @@ Format: ID — date — decision — rationale. Open questions listed below with
   is shown like Favorites (no pack cover / header / "Buy" panel, order kept). Difficulty (user choice: auto-select
   only): songs from our tab open on the recommended difficulty/characteristic (prefix on StandardLevelDetailView.SetContent
   swapping the last-used defaults; the saved last-used difficulty is untouched); the list rows are unchanged.
+- **D-052 — 2026-11-13 — Maps with missing ratings are left out of the model (user).** Every rated map fits at least
+  one path (Accuracy / High Tech / Speed partition the pass-tech plane), but 28 unranked curated maps had BeatLeader
+  stars/acc ratings with pass and tech 0 on every modifier, so they defaulted to Accuracy. `build_model.py`
+  (`has_ratings`) now drops added pool/curated maps whose nomod Stars, Pass, Acc or Tech is not > 0 (no BL-ranked
+  or SS/AccSaber map was affected). Model: 33,455 → 33,427 maps; anchors 11/11.
+- **D-053 — 2026-11-13 — Style mix uses the paths' tech rule; BL "tech" tag dropped (user, option B; revises D-028).**
+  The style mix counted BL-tagged "tech" maps as High Tech but the paths did not, so a player could be labelled Tech
+  by maps the Tech path never counts or recommends. 118 of 731 tagged ranked maps weren't tech-led by ratings (median
+  tech/pass 0.72, e.g. Count down 321, Feral, 666); user: those are mostly speed/extreme maps because of their pass
+  rating. `StyleOf` now uses ratings only, the same rule as `PathRules.TechLed`. Rejected: adding the tag to the
+  paths (A) and keeping the mismatch (C). Effect: the round-3 top High Tech anchor goes from Extreme 37 / High Tech 30 /
+  Speed 27 to Extreme 37 / Speed 30 / High Tech 26, both still established, so the main style (largest established)
+  is Speed. Leaning (separate model, still uses the tag as a feature) stays High Tech 78 %; anchors 11/11.
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are
