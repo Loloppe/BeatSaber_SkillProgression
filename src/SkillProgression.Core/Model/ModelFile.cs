@@ -101,6 +101,8 @@ namespace SkillProgression.Core.Model
         public string MapType { get; set; } = "";
         public double Duration { get; set; }
         public double PeakEbpm { get; set; }
+        /// <summary>Note jump speed from the map file (BeatLeader data); 0 = unknown (models built before D-056).</summary>
+        public double Njs { get; set; }
         public bool RankedBeatLeader { get; set; }
         public bool RankedScoreSaber { get; set; }
         public bool RankedAccSaber { get; set; }

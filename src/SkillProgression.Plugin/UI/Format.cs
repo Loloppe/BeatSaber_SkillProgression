@@ -69,16 +69,20 @@ internal static class Format
     public static ExploreRow ExploreRow(string path, ExploreItem i, bool downloaded)
     {
         var best = i.CurrentAccuracy is double c ? $"<pos=46%>best {c:P1}" : "";
-        return new ExploreRow(i.Map, Title(i.Mapper, i.Name, i.Map.Difficulty, i.Stars),
+        return new ExploreRow(i.Map, Title(i.Mapper, i.Name, i.Map.Difficulty, i.Stars, i.Njs),
             $"{Axis(path)} {i.AxisRating:F2}<pos=20%>expected {i.ExpectedAccuracy:P1}{best}", downloaded ? "Play" : "Get & Play");
     }
 
     /// <summary>Longest mapper / song name in a map title; longer ones end in "…" so difficulty and stars stay visible.</summary>
     public const int MaxMapperLength = 16, MaxSongLength = 26;
 
-    /// <summary>Map title with mapper, difficulty and star rating, e.g. "Mapper - Song [Ex+]  9.47★" (no mapper: "Song …").</summary>
-    private static string Title(string mapper, string name, string difficulty, double stars) =>
-        $"{(string.IsNullOrWhiteSpace(mapper) ? "" : Clip(mapper, MaxMapperLength) + " - ")}{Clip(name, MaxSongLength)} [{Short(difficulty)}]  {stars:F2}★";
+    /// <summary>
+    /// Map title with mapper, difficulty, star rating and NJS (D-056, when known), e.g. "Mapper - Song [Ex+]  9.47★  18 NJS"
+    /// (no mapper: "Song …").
+    /// </summary>
+    private static string Title(string mapper, string name, string difficulty, double stars, double njs) =>
+        $"{(string.IsNullOrWhiteSpace(mapper) ? "" : Clip(mapper, MaxMapperLength) + " - ")}{Clip(name, MaxSongLength)} [{Short(difficulty)}]  {stars:F2}★" +
+        (njs > 0 ? $"  {njs:0.#} NJS" : "");
 
     private static string Clip(string text, int max)
     {
@@ -117,7 +121,7 @@ internal static class Format
         var kind = n.Kind == ObjectiveKind.Push ? "Clear" : "Accuracy";
         var now = r.CurrentAccuracy is double c ? $"<pos=54%>now {c:P1}" : "<pos=54%>now 0%";
         var misses = n.Demoted ? "<pos=74%>moved down" : n.RecentMisses > 0 ? $"<pos=74%>{n.RecentMisses} miss" + (n.RecentMisses > 1 ? "es" : "") : "";
-        return new NextUpRow(r.Map, Title(r.Mapper, r.Name, r.Map.Difficulty, r.Stars),
+        return new NextUpRow(r.Map, Title(r.Mapper, r.Name, r.Map.Difficulty, r.Stars, r.Njs),
             $"{kind}<pos=14%>{Axis(path)} {r.AxisRating:F2}<pos=32%>target {n.TargetAccuracy:P1}{now}{misses}", downloaded ? "Play" : "Get & Play");
     }
 

@@ -80,7 +80,7 @@ def main():
             maps.append({"Hash": m["Hash"], "Difficulty": d["difficultyName"], "Name": song.get("name", ""),
                          "Mapper": song.get("mapper") or "",
                          "Type": int(d.get("type") or 0), "Duration": float(d.get("duration") or song.get("duration") or 0),
-                         "BeatSaverScore": m["Score"], "Ratings": r})
+                         "Njs": float(d.get("njs") or 0), "BeatSaverScore": m["Score"], "Ratings": r})
     out = os.path.join(out_dir("09_curated"), "curated.json")
     json.dump(maps, open(out, "w", encoding="utf-8"))
     print(f"{len(maps)} rated difficulties ({unrated} unrated skipped, {missing} songs unavailable) -> {out}")

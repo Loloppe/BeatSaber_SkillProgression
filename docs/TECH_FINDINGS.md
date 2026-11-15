@@ -132,6 +132,13 @@ v2research\`.
   - Difficulty: `StandardLevelDetailViewController` (line ~302) calls `StandardLevelDetailView.SetContent(level, mask,
     notAllowed, playerData.lastSelectedBeatmapDifficulty, playerData.lastSelectedBeatmapCharacteristic, playerData)`;
     the two defaults pick the selected characteristic/difficulty → a prefix can swap them (ref params).
+  - **"To Solo" (D-057, from local mod sources, 2026-11-14; decompiling via a downloaded ilspycmd was not permitted):**
+    open Solo on a song like BetterSongSearch `SelectedSongView.PlaySong`: `State(LevelCategory.All,
+    SongCore.Loader.CustomLevelsPack, in key, level)`. Return to our flow on Solo's back: prefix/postfix on
+    `FlowCoordinator.DismissFlowCoordinator` (BSS `HookSoloExit.cs`: `immediately = true` when the dismissed flow is
+    `SoloFreePlayFlowCoordinator`, then present ours). Level end of any standard level: SiraUtil `ILevelFinisher.
+    StandardLevelDidFinish(setup, results)` (prefix on `MenuTransitionsHelper.HandleMainGameSceneDidFinish`, app-bound);
+    `setup.gameMode == "Solo"`. Game scene: `GameplayCoreSceneSetupData.beatmapKey` / `.gameplayModifiers` (compiles on 1.40.8).
   - **Pitfall (crashed the menu 2026-11-11):** an Affinity patch on an overloaded method without `argumentTypes` throws
     AmbiguousMatchException, and SiraUtil's AffinityKernel then fails to start → the whole menu container breaks (other
     mods' patches too, NullReferenceExceptions). `StandardLevelDetailView.SetContent` has 2 overloads; all other targets 1

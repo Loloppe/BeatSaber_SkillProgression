@@ -41,15 +41,8 @@ internal class LevelLauncher
     /// <param name="targetAccuracy">Target shown for the play, kept in the play log (D-042).</param>
     public string? Start(MapKey map, Action<PlayRecord?> onFinished, double? targetAccuracy = null)
     {
-        if (!SongCore.Loader.AreSongsLoaded) return "Songs are still loading, try again in a moment.";
-        var level = SongCore.Loader.GetLevelByHash(map.Hash);
-        if (level == null || _beatmapLevelsModel.GetBeatmapLevel(level.levelID) == null)
-            return "This map is not downloaded.";
-
-        var key = level.GetBeatmapKeys().FirstOrDefault(k =>
-            string.Equals(k.beatmapCharacteristic.serializedName, map.Characteristic, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(k.difficulty.ToString(), map.Difficulty, StringComparison.OrdinalIgnoreCase));
-        if (key == default) return $"Difficulty {map.Characteristic} {map.Difficulty} not found in this map.";
+        var error = Resolve(map, out var level, out var key);
+        if (error != null) return error;
         // SongCore only blocks missing requirements on the level select Play button, which we bypass.
         var missing = MissingRequirements(key);
         if (missing.Count > 0)
@@ -92,6 +85,22 @@ internal class LevelLauncher
         return null;
     }
 
+    /// <summary>The downloaded level and beatmap key of a map; an error message for the player when unavailable.</summary>
+    public string? Resolve(MapKey map, out BeatmapLevel level, out BeatmapKey key)
+    {
+        level = null!;
+        key = default;
+        if (!SongCore.Loader.AreSongsLoaded) return "Songs are still loading, try again in a moment.";
+        var found = SongCore.Loader.GetLevelByHash(map.Hash);
+        if (found == null || _beatmapLevelsModel.GetBeatmapLevel(found.levelID) == null)
+            return "This map is not downloaded.";
+        level = found;
+        key = found.GetBeatmapKeys().FirstOrDefault(k =>
+            string.Equals(k.beatmapCharacteristic.serializedName, map.Characteristic, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(k.difficulty.ToString(), map.Difficulty, StringComparison.OrdinalIgnoreCase));
+        return key == default ? $"Difficulty {map.Characteristic} {map.Difficulty} not found in this map." : null;
+    }
+
     /// <summary>Map requirements (e.g. Noodle Extensions) with no capability registered in SongCore.</summary>
     private static List<string> MissingRequirements(BeatmapKey key)
     {
@@ -106,7 +115,7 @@ internal class LevelLauncher
         PlayRecord? record = null;
         try
         {
-            record = ToRecord(setup, results);
+            record = ToRecord(setup, results, _current, _target, _session);
             // A restart plays the level again in the same session: track it afresh.
             if (record.Outcome == PlayOutcome.Restarted) _session.Begin(_session.NoFail);
             else _session.End();
@@ -123,15 +132,17 @@ internal class LevelLauncher
         callback?.Invoke(record);
     }
 
-    private PlayRecord ToRecord(StandardLevelScenesTransitionSetupDataSO setup, LevelCompletionResults results)
+    /// <summary>A play log record (D-011) for a finished play of <paramref name="map"/>, tracked by <paramref name="session"/>.</summary>
+    internal static PlayRecord ToRecord(StandardLevelScenesTransitionSetupDataSO setup, LevelCompletionResults results,
+        MapKey map, double? target, PlaySession session)
     {
         var max = ScoreModel.ComputeMaxMultipliedScoreForBeatmap(setup.transformedBeatmapData);
         return new PlayRecord
         {
             PlayedAtUtc = DateTime.UtcNow,
-            Hash = _current.Hash,
-            Characteristic = _current.Characteristic,
-            Difficulty = _current.Difficulty,
+            Hash = map.Hash,
+            Characteristic = map.Characteristic,
+            Difficulty = map.Difficulty,
             Outcome = results.levelEndAction switch
             {
                 LevelCompletionResults.LevelEndAction.Quit => PlayOutcome.Quit,
@@ -152,10 +163,10 @@ internal class LevelLauncher
             Modifiers = ModifierCodes(results.gameplayModifiers),
             EndSongTime = results.endSongTime,
             SongDuration = setup.beatmapLevel.songDuration,
-            SoftFailed = _session.SoftFailSongTime != null && results.levelEndStateType == LevelCompletionResults.LevelEndStateType.Cleared,
-            SoftFailSongTime = _session.SoftFailSongTime,
-            Pauses = _session.Pauses,
-            TargetAccuracy = _target,
+            SoftFailed = session.SoftFailSongTime != null && results.levelEndStateType == LevelCompletionResults.LevelEndStateType.Cleared,
+            SoftFailSongTime = session.SoftFailSongTime,
+            Pauses = session.Pauses,
+            TargetAccuracy = target,
         };
     }
 

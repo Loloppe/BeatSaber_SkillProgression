@@ -22,7 +22,12 @@ namespace SkillProgression.Core.Progression
         public double AxisRating { get; set; }
         /// <summary>BeatLeader star rating (same ratings as <see cref="AxisRating"/>).</summary>
         public double Stars { get; set; }
-        /// <summary>Accuracy to aim for: map's predicted acc + next waypoint's typical residual.</summary>
+        /// <summary>Note jump speed, 0 = unknown (D-056).</summary>
+        public double Njs { get; set; }
+        /// <summary>
+        /// Accuracy to aim for. Played maps (polish): predicted acc + next waypoint's typical residual. New maps (push,
+        /// D-055): the player's expected acc on the map + one short-term accuracy step.
+        /// </summary>
         public double TargetAccuracy { get; set; }
         /// <summary>Player's best accuracy on it so far (polish), null when never cleared (push).</summary>
         public double? CurrentAccuracy { get; set; }
@@ -75,6 +80,8 @@ namespace SkillProgression.Core.Progression
         public const double PolishWindow = 0.75;
         /// <summary>Half-width (axis units) of the new-maps-at-your-level window (D-051).</summary>
         public const double AtLevelWindow = 0.5;
+        /// <summary>Highest accuracy a new-map target asks for (same cap as Explore's expected accuracy).</summary>
+        public const double MaxTargetAccuracy = 0.9995;
 
         public static PathProgress? Analyze(string path, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog)
         {
@@ -124,6 +131,11 @@ namespace SkillProgression.Core.Progression
             var played = new Dictionary<MapKey, RatedPlay>();
             foreach (var p in bestPlays) played[p.Evidence.Map] = p;
             var popularityKey = $"{path}|{next.Index}";
+            // D-055: new maps aim at what the player usually gets on maps like it (Explore's estimate over all their style
+            // plays) plus one short-term step of the accuracy gap, not the top plays' residual: the top plays are the most
+            // replayed ones, so first attempts on new maps fell ~0.3% short (player feedback 2026-11-14).
+            var estimator = AccuracyEstimator.Fit(path, bestPlays, model.Thresholds);
+            var accuracyStep = Math.Max(0, next.AccuracyResidual - state.AccuracyResidual) / TrainingPlanner.StepsPerWaypointGap;
 
             List<MapRecommendation> NewMaps(double low, double high, double centre) => Diversify(catalog.Recommendable(path)
                 .Where(m => !played.ContainsKey(Key(m)) && m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
@@ -131,8 +143,8 @@ namespace SkillProgression.Core.Progression
                 .Where(x => x.axis >= low && x.axis <= high)
                 .Select(x => new MapRecommendation
                 {
-                    Map = Key(x.map), Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars,
-                    TargetAccuracy = x.map.Ratings[""].PredictedAcc + next.AccuracyResidual,
+                    Map = Key(x.map), Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars, Njs = x.map.Njs,
+                    TargetAccuracy = Math.Min(MaxTargetAccuracy, estimator.Expected(x.map.Ratings[""], path) + accuracyStep),
                     PeerPopularity = x.map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
                 })
                 .OrderByDescending(r => r.PeerPopularity).ThenBy(r => Math.Abs(r.AxisRating - centre)), catalog);
@@ -166,7 +178,7 @@ namespace SkillProgression.Core.Progression
                     .Where(x => Math.Abs(x.axis - polishCentre) <= polishWindow)
                     .Select(x => new MapRecommendation
                     {
-                        Map = x.play.Evidence.Map, Name = x.play.Map.Name, Mapper = x.play.Map.Mapper, AxisRating = x.axis, Stars = x.play.Ratings.Stars,
+                        Map = x.play.Evidence.Map, Name = x.play.Map.Name, Mapper = x.play.Map.Mapper, AxisRating = x.axis, Stars = x.play.Ratings.Stars, Njs = x.play.Map.Njs,
                         TargetAccuracy = x.play.Ratings.PredictedAcc + next.AccuracyResidual,
                         CurrentAccuracy = x.play.Accuracy,
                         PeerPopularity = x.play.Map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
@@ -224,7 +236,7 @@ namespace SkillProgression.Core.Progression
                 .Where(x => !playedSet.Contains(x.key) && x.axis <= easier && x.axis >= floor)
                 .Select(x => new MapRecommendation
                 {
-                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars,
+                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars, Njs = x.map.Njs,
                     TargetAccuracy = x.map.Ratings[""].PredictedAcc + first.AccuracyResidual,
                     PeerPopularity = popularity.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0),
                 })

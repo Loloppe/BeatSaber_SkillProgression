@@ -41,6 +41,15 @@ namespace SkillProgression.Data.BeatLeader
             GetScoresAsync(playerId, ScoreType.Ranked, since, cancellationToken, progress);
 
         /// <summary>
+        /// Ranked then unranked personal bests (D-054: most ScoreSaber / AccSaber-ranked maps are unranked on BeatLeader).
+        /// The caller's catalog decides which maps count.
+        /// </summary>
+        public async Task<IReadOnlyList<PlayEvidence>> GetAllScoresAsync(string playerId, CancellationToken cancellationToken = default) =>
+            (await GetScoresAsync(playerId, ScoreType.Ranked, null, cancellationToken).ConfigureAwait(false))
+            .Concat(await GetScoresAsync(playerId, ScoreType.Unranked, null, cancellationToken).ConfigureAwait(false))
+            .ToList();
+
+        /// <summary>
         /// Personal bests of a player on maps of one status (type=ranked / unranked, BL DifficultyStatus; unranked
         /// verified 2026-11-11), newest first; only those set at or after <paramref name="since"/>.
         /// </summary>
@@ -143,7 +152,10 @@ namespace SkillProgression.Data.BeatLeader
     public enum ScoreType
     {
         Ranked,
-        /// <summary>Unranked maps (Explore's Curated pool, D-045); never used for progression.</summary>
+        /// <summary>
+        /// Unranked maps: ScoreSaber / AccSaber-ranked maps that BeatLeader doesn't rank count for progression (D-054);
+        /// maps ranked nowhere only serve Explore's Curated pool (D-045).
+        /// </summary>
         Unranked,
     }
 

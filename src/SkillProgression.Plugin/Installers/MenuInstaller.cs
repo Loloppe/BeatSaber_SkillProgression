@@ -14,6 +14,8 @@ internal class MenuInstaller : Installer
         // Solo menu "To improve" tab (D-049): menu-scoped, so the patches go away with the menu.
         Container.BindInterfacesAndSelfTo<ToImproveTab>().AsSingle();
         Container.BindInterfacesTo<ToImprovePatches>().AsSingle();
+        // "To Solo" (D-057): one map handed to the Solo menu, recorded as plugin plays, back arrow returns to the plugin.
+        Container.BindInterfacesAndSelfTo<ToSoloHandoff>().AsSingle();
         Container.Bind<PlatformsViewController>().FromNewComponentAsViewController().AsSingle();
         Container.Bind<TrainingViewController>().FromNewComponentAsViewController().AsSingle();
         Container.Bind<ExploreViewController>().FromNewComponentAsViewController().AsSingle();

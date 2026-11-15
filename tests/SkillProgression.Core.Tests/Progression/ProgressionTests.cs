@@ -137,6 +137,29 @@ public class ProgressionTests
     }
 
     [Fact]
+    public void New_map_targets_follow_the_players_usual_accuracy_not_their_top_plays()
+    {
+        // D-055: the top plays (most replayed) beat the prediction by more than the player's other plays do.
+        var top = Enumerable.Range(0, 15).Select(i => Map(10, 8.5, 4, "speed", ppAt100: 500)).ToList();
+        var rest = Enumerable.Range(0, 30).Select(i => Map(10, 8.5, 4, "speed")).ToList();
+        var fresh = Map(10, 9.2, 4, "speed");
+        var model = SpeedModel(top.Concat(rest).Append(fresh));
+        var catalog = new MapCatalog(model.Maps);
+        var best = top.Select(m => catalog.Rate(Play(m, 0.90))!)       // resid -0.05
+            .Concat(rest.Select(m => catalog.Rate(Play(m, 0.86))!))     // resid -0.09
+            .ToList();
+
+        var progress = PathAnalyzer.Analyze("Speed", best, model, catalog)!;
+
+        Assert.Equal(-0.05, progress.State.AccuracyResidual, 9);
+        var target = progress.Objectives.Single(o => o.Kind == ObjectiveKind.Push).Maps.Single(r => r.Map.Hash == fresh.Hash).TargetAccuracy;
+        var step = Math.Max(0, progress.Next!.AccuracyResidual - progress.State.AccuracyResidual) / TrainingPlanner.StepsPerWaypointGap;
+        Assert.Equal(AccuracyEstimator.Fit("Speed", best, Rules).Expected(fresh.Ratings[""], "Speed") + step, target, 9);
+        Assert.True(target < 0.95 - 0.05, "below predicted + the top plays' residual");
+        Assert.True(target > 0.95 - 0.09, "above predicted + the other plays' residual");
+    }
+
+    [Fact]
     public void Path_prior_can_put_push_first()
     {
         var played = Enumerable.Range(0, 10).Select(i => Map(10, 8.5, 4, "speed", predictedAcc: 0.95)).ToList();

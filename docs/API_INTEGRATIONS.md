@@ -12,7 +12,8 @@ Base: `https://api.beatleader.com`. Local server clone (`../beatleader-server`) 
 - `page` (1-based), `count` ≤ 100, `sortBy` (date|pp|accPP|passPP|techPP|acc|stars|…), `order`,
   `type` (3=ranked), `time_from`/`time_to` (unix s) → **incremental sync**, `includeIO=true` → `scoreImprovement`.
   `type` is a `DifficultyStatus` by name: `type=ranked` / `type=unranked` (status 0; verified live 2026-11-11, used by
-  Explore's Curated pool, D-045). Unranked scores carry no stars.
+  Explore's Curated pool, D-045; progression on SS / AccSaber-ranked maps, D-054). Unranked scores carry no stars.
+  **AccSaber scores are BeatLeader scores** (`blScoreId` on each AccSaber score); only 47 of 602 AccSaber maps are BL-ranked.
 - Score: accuracy, pp, passPP, accPP, techPP, fcAccuracy, fcPp, modifiers, missedNotes, badCuts, bombCuts,
   wallsHit, pauses, fullCombo, maxCombo, maxStreak, accLeft/accRight, timeset/timepost, replay (.bsor URL), rank.
 - `playCount`/`lastTryTime` zeroed unless authenticated as the player or player made stats public.
@@ -35,6 +36,7 @@ Rating change history: `/leaderboard/{id}` → `changes[]`.
 **Ratings exist for unranked maps too** (user, verified 2026-11-10 anonymously via `/leaderboards/hash/{hash}`:
 an SS-only and an AccSaber-only map, status 0, returned stars/pass/acc/tech/predictedAcc). Map `type` may be 0
 (untagged) on unranked maps. No pp/rank for unranked maps.
+`/leaderboards/hash/{hash}` difficulties also carry `njs`, `noteJumpStartBeatOffset`, `nps`, `notes`, `duration` (used for NJS, D-056).
 **Requirements** (`difficulty.requirements`, bit flags, `beatleader-server` `Requirements` enum): 2 Chroma, 4 Noodles,
 8 MappingExtensions, 16 Cinema, 32 V3, 64 OptionalProperties, 128 VNJS, 256 Vivify, 512 V3Pepega, 1024 GroupLighting.
 Chroma/Noodles/ME/Cinema are copied from BeatSaver's per-diff `chroma`/`ne`/`me`/`cinema` flags (map *uses* the mod,

@@ -6,7 +6,8 @@ namespace SkillProgression.Plugin.Gameplay;
 
 /// <summary>
 /// Game-scene listener for plugin-started plays: energy reaching 0 with No Fail (a soft fail the results report as a
-/// clear) and pauses. Does nothing for plays started from the normal level select.
+/// clear) and pauses. Does nothing for plays started from the normal level select, except the map handed to Solo with
+/// "To Solo" (D-057), whose tracking starts here because the plugin didn't start it.
 /// The energy is read every frame: on 1.40.8 the energy counter's "reached 0" event and noFail flag don't reflect the
 /// No Fail modifier (FPFC tests 2026-11-10), so No Fail comes from the modifiers the plugin started the level with.
 /// </summary>
@@ -16,12 +17,14 @@ internal class GameplayTracker : IInitializable, ITickable, IDisposable
     [InjectOptional] private readonly GameEnergyCounter? _injectedEnergy = null;
     [InjectOptional] private readonly PauseController? _pause = null;
     [InjectOptional] private readonly IAudioTimeSource? _time = null;
+    [InjectOptional] private readonly GameplayCoreSceneSetupData? _setup = null;
 
     private GameEnergyCounter? _energy;
     private bool _loggedEnergy;
 
     public void Initialize()
     {
+        if (!_session.Active) BeginHandoff();
         if (!_session.Active) return;
         if (_pause != null) _pause.didPauseEvent += HandlePaused;
         else Plugin.Log.Warn("Pause tracking unavailable: no PauseController in this scene.");
@@ -51,4 +54,23 @@ internal class GameplayTracker : IInitializable, ITickable, IDisposable
     }
 
     private void HandlePaused() => _session.Pauses++;
+
+    /// <summary>D-057: the handed-off map started from Solo (again after a restart) is tracked like a plugin start.</summary>
+    private void BeginHandoff()
+    {
+        if (_session.Handoff is not { } handoff || _setup == null) return;
+        try
+        {
+            var key = _setup.beatmapKey;
+            var hash = SongCore.Collections.GetCustomLevelHash(key.levelId);
+            if (!string.Equals(hash, handoff.Map.Hash, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(key.beatmapCharacteristic.serializedName, handoff.Map.Characteristic, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(key.difficulty.ToString(), handoff.Map.Difficulty, StringComparison.OrdinalIgnoreCase)) return;
+            _session.Begin(_setup.gameplayModifiers.noFailOn0Energy, fromSolo: true);
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Warn($"Could not track the To Solo play: {e.Message}");
+        }
+    }
 }

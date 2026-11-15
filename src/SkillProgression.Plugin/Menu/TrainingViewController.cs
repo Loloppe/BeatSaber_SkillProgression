@@ -9,6 +9,7 @@ using SkillProgression.Core.Progression;
 using SkillProgression.Data.State;
 using SkillProgression.Plugin.Gameplay;
 using SkillProgression.Plugin.Services;
+using SkillProgression.Plugin.Solo;
 using SkillProgression.Plugin.UI;
 using Zenject;
 
@@ -24,6 +25,10 @@ internal class TrainingViewController : ViewController
     [Inject] private readonly MapDownloader _downloader = null!;
     [InjectOptional] private readonly IPlatformUserModel? _platformUserModel = null;
     [Inject] private readonly PlatformsViewController _platforms = null!;
+    [Inject] private readonly ToSoloHandoff _handoff = null!;
+
+    /// <summary>Asks the flow to open the Solo menu with this level selected ("To Solo", D-057).</summary>
+    public Action<SelectLevelCategoryViewController.LevelCategory, BeatmapLevelPack, BeatmapLevel, BeatmapKey>? SoloRequested { get; set; }
 
     internal Action? ExploreRequested { get; set; }
     internal Action? AchievementsRequested { get; set; }
@@ -38,11 +43,7 @@ internal class TrainingViewController : ViewController
     /// The next load syncs with BeatLeader (incremental: scores since the last sync). Called each time the plugin is
     /// opened from the main menu; coming back from Explore / Achievements inside the plugin doesn't resync.
     /// </summary>
-    public void SyncOnNextLoad()
-    {
-        _synced = false;
-        _service.ResyncUnrankedOnNextUse();
-    }
+    public void SyncOnNextLoad() => _synced = false;
 
     public override void DidActivate(bool firstActivation, bool addedToHierarchy, bool screenSystemEnabling)
     {
@@ -53,7 +54,8 @@ internal class TrainingViewController : ViewController
                 OnChooseStart = importBeatLeader => ChooseStart(importBeatLeader ? StartMode.ImportBeatLeader : StartMode.Fresh),
                 OnFocusChanged = ChangeFocus,
                 OnPoolChanged = ChangePool,
-                OnPlay = Play,
+                OnPlay = row => Play(row, toSolo: false),
+                OnToSolo = row => Play(row, toSolo: true),
                 OnSkip = Skip,
                 OnRequestStartChange = RequestStartChange,
                 OnConfirmStartChange = ConfirmStartChange,
@@ -90,7 +92,7 @@ internal class TrainingViewController : ViewController
                 return;
             }
 
-            await RefreshAsync(sync: !_synced, showImport: _service.LastSyncUtc == null && _service.State.StartMode == StartMode.ImportBeatLeader);
+            await RefreshAsync(sync: !_synced, showImport: _service.NeedsFullImport && _service.State.StartMode == StartMode.ImportBeatLeader);
             _synced = true;
         }
         catch (Exception e)
@@ -178,7 +180,7 @@ internal class TrainingViewController : ViewController
     private async void ChooseStart(StartMode mode)
     {
         _service.SetStartMode(mode, DateTime.UtcNow);
-        try { await RefreshAsync(sync: true, showImport: mode == StartMode.ImportBeatLeader && _service.LastSyncUtc == null); }
+        try { await RefreshAsync(sync: true, showImport: mode == StartMode.ImportBeatLeader && _service.NeedsFullImport); }
         catch (Exception e) { Plugin.Log.Error(e); ShowError("Loading failed. See the log for details."); }
     }
 
@@ -228,7 +230,8 @@ internal class TrainingViewController : ViewController
         catch (Exception e) { Plugin.Log.Error(e); }
     }
 
-    private async void Play(NextUpRow row)
+    /// <param name="toSolo">"To Solo" (D-057): hand the map to the Solo menu instead of starting it.</param>
+    private async void Play(NextUpRow row, bool toSolo)
     {
         if (_view == null || _snapshot == null) return;
         var item = _snapshot.NextUp.FirstOrDefault(n => n.Recommendation.Map.Equals(row.Map));
@@ -244,6 +247,17 @@ internal class TrainingViewController : ViewController
                 try { await _downloader.DownloadAsync(row.Map.Hash); }
                 finally { _view.Working.Value = false; }
                 _view.Status.Value = "Starting";
+            }
+
+            if (toSolo)
+            {
+                var handoffError = _handoff.Prepare(row.Map, item.TargetAccuracy, out var level, out var key);
+                _view.Busy.Value = false;
+                RefreshRows();
+                _view.Status.Value = handoffError ?? "";
+                if (handoffError == null)
+                    SoloRequested?.Invoke(SelectLevelCategoryViewController.LevelCategory.All, SongCore.Loader.CustomLevelsPack, level, key);
+                return;
             }
 
             var calibrating = _snapshot.Calibration != null;

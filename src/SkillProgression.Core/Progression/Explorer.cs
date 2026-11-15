@@ -22,6 +22,8 @@ namespace SkillProgression.Core.Progression
         public string Mapper { get; set; } = "";
         public double AxisRating { get; set; }
         public double Stars { get; set; }
+        /// <summary>Note jump speed, 0 = unknown (D-056).</summary>
+        public double Njs { get; set; }
         public double ExpectedAccuracy { get; set; }
         public double? CurrentAccuracy { get; set; }
     }
@@ -184,7 +186,7 @@ namespace SkillProgression.Core.Progression
                     .Where(p => PathRules.IsRecommendable(catalog, p.Map, p.Ratings, path, t))
                     .Select(p => new ExploreItem
                     {
-                        Map = p.Evidence.Map, Name = p.Map.Name, Mapper = p.Map.Mapper, AxisRating = PathRules.Axis(path, p.Ratings), Stars = p.Ratings.Stars,
+                        Map = p.Evidence.Map, Name = p.Map.Name, Mapper = p.Map.Mapper, AxisRating = PathRules.Axis(path, p.Ratings), Stars = p.Ratings.Stars, Njs = p.Map.Njs,
                         ExpectedAccuracy = ctx.Estimator.Expected(p.Ratings, path), CurrentAccuracy = p.Accuracy,
                     })
                     .Where(i => i.ExpectedAccuracy - i.CurrentAccuracy >= MinGain)
@@ -203,7 +205,7 @@ namespace SkillProgression.Core.Progression
                 .Where(x => !played.Contains(x.key))
                 .Select(x => (new ExploreItem
                 {
-                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = PathRules.Axis(path, x.r), Stars = x.r.Stars, ExpectedAccuracy = ctx.Estimator.Expected(x.r, path),
+                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = PathRules.Axis(path, x.r), Stars = x.r.Stars, Njs = x.map.Njs, ExpectedAccuracy = ctx.Estimator.Expected(x.r, path),
                 }, curated ? x.map.BeatSaverScore : popularityKeys.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0)))
                 .ToList();
             return WithRange(ctx);

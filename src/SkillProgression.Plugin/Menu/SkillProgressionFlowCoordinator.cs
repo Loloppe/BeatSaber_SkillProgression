@@ -1,6 +1,6 @@
 using System.Linq;
 using HMUI;
-using SkillProgression.Plugin.Solo;
+using SkillProgression.Plugin.Gameplay;
 using UnityEngine;
 using Zenject;
 
@@ -19,6 +19,7 @@ internal class SkillProgressionFlowCoordinator : FlowCoordinator
     [Inject] private readonly PlatformsViewController _platformsViewController = null!;
     [Inject] private readonly ExploreViewController _exploreViewController = null!;
     [Inject] private readonly AchievementsViewController _achievementsViewController = null!;
+    [Inject] private readonly PlaySession _session = null!;
 
     private const string Title = "Skill Progression";
     [Inject] private readonly GameplaySetupViewController _gameplaySetupViewController = null!;
@@ -32,10 +33,13 @@ internal class SkillProgressionFlowCoordinator : FlowCoordinator
             _trainingViewController.ExploreRequested = OpenExplore;
             _trainingViewController.AchievementsRequested = () => Open(_achievementsViewController, "Achievements");
             _exploreViewController.SoloRequested = OpenSolo;
+            _trainingViewController.SoloRequested = OpenSolo;
         }
 
         if (addedToHierarchy)
         {
+            // Back in the plugin (main menu button or Solo's back arrow): a "To Solo" handoff ends here (D-057).
+            _session.Handoff = null;
             // Opening the plugin from the main menu resyncs BeatLeader (scores set elsewhere, e.g. from Solo, user 2026-11-11).
             _trainingViewController.SyncOnNextLoad();
             // Same setup as SoloFreePlayFlowCoordinator on 1.40.8; the panel saves changes to player data itself.
@@ -50,11 +54,11 @@ internal class SkillProgressionFlowCoordinator : FlowCoordinator
     private void OpenExplore() => Open(_exploreViewController, "Explore");
 
     /// <summary>
-    /// D-049: leaves the plugin for the game's Solo menu on the "To improve" tab with a map selected (BetterSongSearch's
-    /// route on 1.40.8: SoloFreePlayFlowCoordinator.Setup(state), then the main menu's Solo button). The game ignores
-    /// the state's difficulty; the level is selected.
+    /// Leaves the plugin for the game's Solo menu with a map selected: on the "To improve" tab (D-049) or on All with the
+    /// custom levels pack ("To Solo", D-057). BetterSongSearch's route on 1.40.8: SoloFreePlayFlowCoordinator.Setup(state),
+    /// then the main menu's Solo button. The game ignores the state's difficulty; the level is selected.
     /// </summary>
-    private void OpenSolo(BeatmapLevelPack pack, BeatmapLevel level, BeatmapKey key)
+    private void OpenSolo(SelectLevelCategoryViewController.LevelCategory category, BeatmapLevelPack pack, BeatmapLevel level, BeatmapKey key)
     {
         var solo = Resources.FindObjectsOfTypeAll<SoloFreePlayFlowCoordinator>().FirstOrDefault();
         if (solo == null)
@@ -62,7 +66,7 @@ internal class SkillProgressionFlowCoordinator : FlowCoordinator
             Plugin.Log.Warn("Solo flow coordinator not found.");
             return;
         }
-        solo.Setup(new LevelSelectionFlowCoordinator.State(ToImproveTab.Category, pack, in key, level));
+        solo.Setup(new LevelSelectionFlowCoordinator.State(category, pack, in key, level));
         _parentFlowCoordinator.DismissFlowCoordinator(this, immediately: true,
             finishedCallback: () => GameObject.Find("SoloButton")?.GetComponent<NoTransitionsButton>()?.onClick.Invoke());
     }

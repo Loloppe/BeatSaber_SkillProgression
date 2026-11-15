@@ -78,6 +78,8 @@ internal class TrainingView : ReactiveComponent
     public Action<MapPool>? OnPoolChanged { get; set; }
     public Action<NextUpRow>? OnPlay { get; set; }
     public Action<NextUpRow>? OnSkip { get; set; }
+    /// <summary>"To Solo" (D-057): play the row's map from the game's Solo menu.</summary>
+    public Action<NextUpRow>? OnToSolo { get; set; }
     public Action? OnRequestStartChange { get; set; }
     public Action<bool>? OnConfirmStartChange { get; set; }     // true = confirmed
     public Action? OnOpenExplore { get; set; }
@@ -220,6 +222,8 @@ internal class TrainingView : ReactiveComponent
                                     },
                                     new BsPrimaryTextButton { sText = cell.Map(c => c.Item.PlayText), FlexItem = { Size = new() { x = 20.pt, y = 5.5f.pt } },
                                                               sInteractable = Busy.Map(b => !b), OnClick = () => OnPlay?.Invoke(cell.Item) },
+                                    new BsTextButton { Text = "To Solo", FlexItem = { Size = new() { x = 16.pt, y = 5.5f.pt } },
+                                                       sInteractable = Busy.Map(b => !b), OnClick = () => OnToSolo?.Invoke(cell.Item) },
                                     new BsTextButton { Text = "Skip", FlexItem = { Size = new() { x = 12.pt, y = 5.5f.pt } },
                                                        sInteractable = Busy.Map(b => !b), OnClick = () => OnSkip?.Invoke(cell.Item) },
                                 }

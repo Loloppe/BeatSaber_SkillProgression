@@ -392,6 +392,44 @@ Format: ID — date — decision — rationale. Open questions listed below with
   paths (A) and keeping the mismatch (C). Effect: the round-3 top High Tech anchor goes from Extreme 37 / High Tech 30 /
   Speed 27 to Extreme 37 / Speed 30 / High Tech 26, both still established, so the main style (largest established)
   is Speed. Leaning (separate model, still uses the tag as a feature) stays High Tech 78 %; anchors 11/11.
+- **D-054 — 2026-11-14 — Unranked BeatLeader PBs count for progression on SS / AccSaber-ranked maps (user).** Player
+  feedback (high-ranked AccSaber player): "current score 0%" on AccSaber maps they had all played. AccSaber scores are
+  BeatLeader scores (`blScoreId`), but only 47 of the 602 AccSaber maps are BeatLeader-ranked; the other scores are
+  `type=unranked` on BeatLeader, which we only fetched for Explore's Curated pool (D-045). That player: 598 AccSaber
+  scores, 47 visible. Now the plugin syncs unranked PBs with the ranked ones on every Training sync (own cache file,
+  incremental, second half of the import bar; full import screen also when only the unranked cache is missing) and they
+  are evidence everywhere. The ranked catalog decides what counts: SS / AccSaber-ranked maps do (pp from the D-041
+  curves), maps ranked nowhere still only serve Curated (D-045 unchanged). The separate once-per-session Curated sync was
+  removed. CLI `player` / `check-anchors` use both lists; anchors 11/11 (e.g. an Extreme anchor now reads 4,285 PBs, 487 on ranked maps;
+  the reporting player 1,968 rated instead of 885). Not covered: BeatLeader statuses other than ranked / unranked (e.g. qualified) are not fetched.
+- **D-055 — 2026-11-14 — New-map accuracy targets = the player's usual accuracy + one short-term step (user, option A).**
+  Same feedback: every AccSaber suggestion missed its target by 0.3–0.4%. Push / "new maps at your level" targets were
+  predicted acc + the next waypoint's residual; past the last waypoint that is an open-ended step over the top-15 (most
+  replayed) plays' residual: +0.4% for that player, who gets +0.01% vs predicted on AccSaber maps. Now a new map's target =
+  Explore's `AccuracyEstimator` (pp-weighted fit of acc vs predicted over all the player's style plays, by difficulty)
+  + (next waypoint residual - player's residual) / 4 when positive, capped at 99.95%; Training and Explore now agree.
+  That player: ONE SPARK 99.4% → 99.0%. Unchanged: polish targets on played maps (waypoint residual, short-term gain
+  cap), starter maps and calibration targets (waypoint residual), progress measurement. Rejected: a residual per pool (B)
+  and only dropping the open-ended accuracy step (C, still ~0.2% too high). The step uses the default 4 steps, not the
+  adaptive count (D-042).
+- **D-056 — 2026-11-14 — NJS per map in the model, shown after the star rating (user: option A, NJS only).** Same
+  feedback asked for info to choose a jump distance / reaction time. Every model map gets `Njs` (0 = unknown): BL-ranked
+  maps from the population DB `Leaderboards.Njs`, SS / AccSaber and curated maps from BeatLeader's `/leaderboards/hash`
+  responses already cached by fetch_pool_ratings.py / fetch_curated.py (`difficulty.njs`) — same coverage as a BeatSaver
+  crawl (option A), without a new fetch. Offset (needed for jump distance / reaction time) not stored (user: NJS only).
+  Map rows in Next up and Explore: "Mapper - Song [Ex+]  9.47★  18 NJS" (omitted when unknown). JDFixer with the
+  plugin's direct start: untested.
+- **D-057 — 2026-11-14 — "To Solo" button on map rows (user, from player feedback; option A).** So that mods working in
+  the Solo menu (e.g. JDFixer's per-map preferences) apply, Next up and Explore rows get "To Solo" next to Play: it
+  downloads the map if needed and opens the Solo menu on **All** (custom levels pack) with the song selected and its
+  difficulty preselected (StandardLevelDetailView.SetContent prefix, like D-049). The handoff (map + the row's target:
+  Next up / calibration target, Explore expected acc) lasts until the plugin is opened again. **Option A (user):** plays of
+  that exact map and difficulty started from Solo count as **plugin plays** — play log entry with the target, so steps
+  (D-042), the 3-miss rule (D-030), calibration (D-040) and achievements see them; soft fails and pauses are tracked
+  (GameplayTracker starts when the game scene's beatmap key matches). Other Solo plays stay scores only (D-049; the
+  handed-off map also gets its Solo score, a harmless duplicate). **Back arrow** (user: "easy way back"; native UI): during
+  a handoff, Solo's back arrow returns to Skill Progression instead of the main menu (BetterSongSearch's route). Not done:
+  Training's result line for a Solo play (Training just refreshes); "Open in Solo" (D-049) keeps returning to the main menu.
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are

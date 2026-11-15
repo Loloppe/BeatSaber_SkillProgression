@@ -42,7 +42,7 @@ namespace SkillProgression.Data.BeatLeader
         private readonly string _filePath;
         private readonly ScoreType _type;
 
-        /// <param name="type">Ranked PBs (progression) or unranked ones (Explore's Curated pool, D-045), one file each.</param>
+        /// <param name="type">Ranked or unranked PBs (SS / AccSaber-ranked maps, D-054; Curated, D-045), one file each.</param>
         public ScoreCache(string filePath, ScoreType type = ScoreType.Ranked)
         {
             _filePath = filePath;

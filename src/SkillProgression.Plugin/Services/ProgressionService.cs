@@ -60,9 +60,12 @@ internal sealed class ProgressionService
     private readonly ScoreCache _scoreCache;
     /// <summary>Clears made from the game's Solo menu, scores only (D-049).</summary>
     private readonly SoloScoreStore _soloScores;
-    /// <summary>Unranked PBs, for Explore's Curated pool only (D-045); synced once per session on first use.</summary>
+    /// <summary>
+    /// Unranked PBs, synced with the ranked ones: progression on SS / AccSaber-ranked maps BeatLeader doesn't rank
+    /// (D-054), Explore's Curated pool (D-045). The ranked catalog ignores maps ranked nowhere.
+    /// </summary>
     private readonly ScoreCache _unrankedCache;
-    private Task<IReadOnlyList<PlayEvidence>>? _unrankedScores;
+    private IReadOnlyList<PlayEvidence> _unrankedScores = Array.Empty<PlayEvidence>();
     private readonly BeatLeaderClient _beatLeader;
     private readonly PlatformStatsClient _platforms;
     private ProgressionEngine? _engine;
@@ -91,6 +94,9 @@ internal sealed class ProgressionService
     public string ModelPath => Path.Combine(_dataDir, "model.json.gz");
 
     public DateTime? LastSyncUtc => _scoreCache.LastSyncUtc;
+
+    /// <summary>The next sync downloads everything: no ranked or no unranked PBs cached yet (unranked added by D-054).</summary>
+    public bool NeedsFullImport => _scoreCache.LastSyncUtc == null || _unrankedCache.LastSyncUtc == null;
 
     public void SaveState() => _stateStore.Save(State);
 
@@ -152,14 +158,25 @@ internal sealed class ProgressionService
         {
             try
             {
-                _beatLeaderScores = sync
-                    ? await _scoreCache.SyncAsync(_beatLeader, playerId, DateTime.UtcNow, ct, progress)
-                    : _beatLeaderScores.Count > 0 ? _beatLeaderScores : _scoreCache.Cached();
+                if (sync)
+                {
+                    // Ranked fill the first half of the import bar, unranked the second.
+                    _beatLeaderScores = await _scoreCache.SyncAsync(_beatLeader, playerId, DateTime.UtcNow, ct,
+                        Scaled(progress, 0, 0.5));
+                    _unrankedScores = await _unrankedCache.SyncAsync(_beatLeader, playerId, DateTime.UtcNow, ct,
+                        Scaled(progress, 0.5, 0.5));
+                }
+                else
+                {
+                    if (_beatLeaderScores.Count == 0) _beatLeaderScores = _scoreCache.Cached();
+                    if (_unrankedScores.Count == 0) _unrankedScores = _unrankedCache.Cached();
+                }
             }
             catch (Exception e) when (!(e is OperationCanceledException))
             {
                 Plugin.Log.Warn($"BeatLeader sync failed, using cached scores: {e.Message}");
                 _beatLeaderScores = _scoreCache.Cached();
+                _unrankedScores = _unrankedCache.Cached();
                 offline = true;
             }
         }
@@ -271,6 +288,7 @@ internal sealed class ProgressionService
     private DateTime? Since => State.StartMode == StartMode.Fresh ? State.FreshStartUtc : null;
 
     private List<PlayEvidence> Evidence(IReadOnlyList<PlayRecord> log) => _beatLeaderScores
+        .Concat(_unrankedScores)
         .Concat(_soloScores.All())
         .Concat(log.Where(p => p.IsPass() && !p.Practice).Select(ToEvidence))
         .ToList();
@@ -281,11 +299,31 @@ internal sealed class ProgressionService
         _model = await Task.Run(() => ModelLoader.Load(ModelPath), ct);
         _engine = new ProgressionEngine(_model);
         if (_beatLeaderScores.Count == 0) _beatLeaderScores = _scoreCache.Cached();
+        if (_unrankedScores.Count == 0) _unrankedScores = _unrankedCache.Cached();
+    }
+
+    /// <summary>Maps a sync's 0..1 progress onto [start, start + length] of the overall bar.</summary>
+    private static IProgress<double>? Scaled(IProgress<double>? progress, double start, double length) =>
+        progress == null ? null : new ScaledProgress(progress, start, length);
+
+    private sealed class ScaledProgress : IProgress<double>
+    {
+        private readonly IProgress<double> _inner;
+        private readonly double _start, _length;
+
+        public ScaledProgress(IProgress<double> inner, double start, double length)
+        {
+            _inner = inner;
+            _start = start;
+            _length = length;
+        }
+
+        public void Report(double value) => _inner.Report(_start + value * _length);
     }
 
     /// <summary>
     /// Explore side feature: a fresh list for a style, mode and difficulty offset (uses cached scores). The pool is
-    /// Explore's own choice: a ranked pool (shared with Training) or Curated (D-045, adds unranked BeatLeader PBs).
+    /// Explore's own choice: a ranked pool (shared with Training) or Curated (D-045).
     /// </summary>
     public async Task<(ExploreResult result, int[] counts)> ExploreAsync(string path, ExploreMode mode, int offset, int seed,
         MapPool pool, CancellationToken ct = default) =>
@@ -330,20 +368,18 @@ internal sealed class ProgressionService
         _engine!.Catalog.Pool = State.MapPool; // Training's pool, for Training's level below
         var catalog = _engine.ExploreCatalog;
         catalog.Pool = pool;
-        // One shared sync per session (Explore reloads on every slider step); not cancelled with a superseded request.
-        var unranked = pool == MapPool.Curated ? await (_unrankedScores ??= LoadUnrankedScoresAsync()) : Array.Empty<PlayEvidence>();
         return await Task.Run(() =>
         {
             var log = _playLog.ReadAll(out _);
             var all = Evidence(log);
-            var ranked = all.Where(e => Since == null || e.TimeUtc >= Since.Value).ToList();
             // D-047: slider 0 = the difficulty Training works at on this style (same evidence, ranked maps only); after a
             // fresh start, starter maps aim at the calibrated level as in Training.
             var startLevel = FreshStartLevel(path, log, all);
             var report = _engine!.Analyze(all, new[] { path }, Since,
                 startLevel is double s ? new Dictionary<string, double> { [path] = s } : null);
             var level = Explorer.TrainingLevel(report, path);
-            var rated = ranked.Concat(unranked.Where(e => Since == null || e.TimeUtc >= Since.Value))
+            // Unranked PBs on maps ranked nowhere count here only (Curated, D-045).
+            var rated = all.Where(e => Since == null || e.TimeUtc >= Since.Value)
                 .Select(catalog.Rate).Where(r => r != null).Select(r => r!).ToList();
             var best = ProfileBuilder.BestPerMap(rated);
             return (Explorer.Suggest(path, mode, offset, best, _model!, catalog, seed, count, level, randomPick),
@@ -364,25 +400,6 @@ internal sealed class ProgressionService
         if (State.Calibrations.TryGetValue(path, out var c) && c.Skipped) return Calibrator.CautiousLevel(oldLevel);
         var status = Calibrator.Status(oldLevel, Calibrator.Bottom(path, _model!, _engine.Catalog) ?? 0, State.CalibrationPicks(path), log);
         return status.Done ? status.Estimate : status.Level;
-    }
-
-    /// <summary>The next Curated Explore list resyncs unranked PBs (the plugin was reopened, user 2026-11-11).</summary>
-    public void ResyncUnrankedOnNextUse() => _unrankedScores = null;
-
-    /// <summary>Unranked BeatLeader PBs (synced, falling back to the cache; none without BeatLeader import).</summary>
-    private async Task<IReadOnlyList<PlayEvidence>> LoadUnrankedScoresAsync()
-    {
-        if (State.StartMode != StartMode.ImportBeatLeader && State.StartMode != StartMode.Fresh || string.IsNullOrEmpty(State.PlayerId))
-            return Array.Empty<PlayEvidence>();
-        try
-        {
-            return await _unrankedCache.SyncAsync(_beatLeader, State.PlayerId, DateTime.UtcNow);
-        }
-        catch (Exception e)
-        {
-            Plugin.Log.Warn($"BeatLeader unranked sync failed, using cached scores: {e.Message}");
-            return _unrankedCache.Cached();
-        }
     }
 
     public async Task<IReadOnlyList<PlatformStats>> GetPlatformStatsAsync(string playerId, CancellationToken ct = default)
@@ -441,7 +458,7 @@ internal sealed class ProgressionService
                 TargetAccuracy = pick.TargetAccuracy,
                 Recommendation = new MapRecommendation
                 {
-                    Map = pick.Map, Name = map.Name, Mapper = map.Mapper, AxisRating = pick.Axis, Stars = map.Ratings[""].Stars,
+                    Map = pick.Map, Name = map.Name, Mapper = map.Mapper, AxisRating = pick.Axis, Stars = map.Ratings[""].Stars, Njs = map.Njs,
                     TargetAccuracy = pick.TargetAccuracy,
                 },
             },

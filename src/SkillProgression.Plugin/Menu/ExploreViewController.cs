@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HMUI;
 using Reactive;
+using SkillProgression.Core.Maps;
 using SkillProgression.Core.Model;
 using SkillProgression.Core.Plays;
 using SkillProgression.Core.Profiles;
@@ -26,9 +27,10 @@ internal class ExploreViewController : ViewController
     [Inject] private readonly LevelLauncher _launcher = null!;
     [Inject] private readonly MapDownloader _downloader = null!;
     [Inject] private readonly ToImproveTab _toImprove = null!;
+    [Inject] private readonly ToSoloHandoff _handoff = null!;
 
-    /// <summary>Asks the flow to open the Solo menu on the "To improve" tab with this level selected (D-049).</summary>
-    public Action<BeatmapLevelPack, BeatmapLevel, BeatmapKey>? SoloRequested { get; set; }
+    /// <summary>Asks the flow to open the Solo menu on a level category with this level selected (D-049, D-057).</summary>
+    public Action<SelectLevelCategoryViewController.LevelCategory, BeatmapLevelPack, BeatmapLevel, BeatmapKey>? SoloRequested { get; set; }
 
     private ExploreView? _view;
     private List<ExploreItem> _items = new();
@@ -43,7 +45,7 @@ internal class ExploreViewController : ViewController
         {
             _view = new ExploreView
             {
-                OnChanged = () => _ = LoadAsync(), OnNewList = NewList, OnPlay = Play, OnOpenInSolo = OpenInSolo,
+                OnChanged = () => _ = LoadAsync(), OnNewList = NewList, OnPlay = row => Play(row, toSolo: false), OnToSolo = row => Play(row, toSolo: true), OnOpenInSolo = OpenInSolo,
                 OnPoolChanged = pool =>
                 {
                     _curated = pool == MapPool.Curated;
@@ -134,7 +136,7 @@ internal class ExploreViewController : ViewController
                 string.Equals(k.beatmapCharacteristic.serializedName, first.item.Map.Characteristic, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(k.difficulty.ToString(), first.item.Map.Difficulty, StringComparison.OrdinalIgnoreCase));
             _view.Status.Value = "";
-            SoloRequested?.Invoke(pack, first.level, key);
+            SoloRequested?.Invoke(ToImproveTab.Category, pack, first.level, key);
         }
         catch (Exception e)
         {
@@ -148,7 +150,8 @@ internal class ExploreViewController : ViewController
         }
     }
 
-    private async void Play(ExploreRow row)
+    /// <param name="toSolo">"To Solo" (D-057): hand the map to the Solo menu instead of starting it.</param>
+    private async void Play(ExploreRow row, bool toSolo)
     {
         if (_view == null) return;
         var item = _items.FirstOrDefault(i => i.Map.Equals(row.Map));
@@ -165,6 +168,11 @@ internal class ExploreViewController : ViewController
                 finally { _view.Working.Value = false; }
             }
 
+            if (toSolo)
+            {
+                HandOff(row.Map, item.ExpectedAccuracy);
+                return;
+            }
             var error = _launcher.Start(row.Map, record => OnLevelFinished(item, record), item.ExpectedAccuracy);
             if (error != null)
             {
@@ -180,6 +188,20 @@ internal class ExploreViewController : ViewController
             _view.Busy.Value = false;
             RefreshRows();
         }
+    }
+
+    private void HandOff(MapKey map, double target)
+    {
+        var error = _handoff.Prepare(map, target, out var level, out var key);
+        _view!.Busy.Value = false;
+        RefreshRows();
+        if (error != null)
+        {
+            _view.Status.Value = error;
+            return;
+        }
+        _view.Status.Value = "";
+        SoloRequested?.Invoke(SelectLevelCategoryViewController.LevelCategory.All, SongCore.Loader.CustomLevelsPack, level, key);
     }
 
     private void OnLevelFinished(ExploreItem item, PlayRecord? record)

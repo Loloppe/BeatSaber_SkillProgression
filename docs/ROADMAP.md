@@ -92,3 +92,15 @@ Outstanding / known gaps:
   that test: accuracy step shown as "95.5% (+0.6%)" instead of "- -0.9%" vs predicted; "new maps at your level"
   objective when only path pp is behind (D-051, a fresh start left Next up with one map) — awaiting in-game test.
 - ~~SS/AccSaber map pools (D-023)~~ — done 2026-11-10 (D-041). Postponed: unranked maps in Explore (D-032, D-043: catalogue-wide BL fetch too long). ~~adaptive step sizes~~ done 2026-11-10 (D-042).
+- 2026-11-14: Player feedback (high-ranked AccSaber player): (1) AccSaber maps showed 0% current score → D-054, unranked
+  BeatLeader PBs synced and counted (verified in-game by the user 2026-11-14). (2) Targets
+  0.3–0.4% too high on every AccSaber suggestion: confirmed by data — past the last Accuracy waypoint the target is
+  predicted + 0.4% (open-ended step over the top-15 residual +0.2%), while their residual on AccSaber maps is +0.01%
+  (551 maps), +0.09% on BL-ranked AccSaber maps, -0.12% on all their low-pass BL-ranked maps. Not fixed by D-054 (top-15
+  unchanged) — D-055: new-map targets from the player's usual accuracy (that player: -0.4%). (3) Maps with resets (Analyzer parity errors) under-hit on BeatLeader: no effect found
+  in their PBs (corr 0.08) nor population AccVsPredicted (~0.05% spread) on low-pass ranked maps; need the map names.
+  Parity counts exist only for BL-ranked maps (population DB `ParityErrors`). (4) JD / reaction-time info: D-056, NJS
+  in the model and after the star rating in map rows (verified in-game 2026-11-14).
+- 2026-11-14 (cont.): "To Solo" on Next up and Explore rows (D-057): opens Solo on the map's difficulty so JDFixer & co.
+  apply; plays of that map from Solo are plugin plays; Solo's back arrow returns to the plugin. **Verified in-game by the user
+  2026-11-14** (with the BeatLeader r2mc Heck 1.40 replay fix; test zip in data/release updated).

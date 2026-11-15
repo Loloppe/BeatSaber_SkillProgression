@@ -31,7 +31,7 @@ switch (args[0])
     case "player" when options.Positional.Count == 1:
     {
         var since = options.Get("since") is { } s ? DateTime.SpecifyKind(DateTime.Parse(s), DateTimeKind.Utc) : (DateTime?)null;
-        var scores = await beatLeader.GetRankedScoresAsync(options.Positional[0]);
+        var scores = await beatLeader.GetAllScoresAsync(options.Positional[0]);
         var paths = options.Get("path") is { } p ? new[] { p } : null;
         Report.Print(options.Positional[0], engine.Analyze(scores, paths, since), model);
         return 0;
@@ -48,7 +48,7 @@ switch (args[0])
         var ok = 0;
         foreach (var (id, expected) in anchors)
         {
-            var report = engine.Analyze(await beatLeader.GetRankedScoresAsync(id), Array.Empty<string>());
+            var report = engine.Analyze(await beatLeader.GetAllScoresAsync(id), Array.Empty<string>());
             var pr = report.Profile;
             // Anchors must have their destination among the established styles (review round 3: players are mixes).
             var match = report.StyleMix.Established.Contains(expected);
@@ -119,7 +119,7 @@ internal static class Report
 {
     public static void Print(string playerId, PlayerReport r, ModelFile model)
     {
-        Console.WriteLine($"Player {playerId}: {r.EvidenceCount} ranked PBs, {r.RatedCount} on model maps");
+        Console.WriteLine($"Player {playerId}: {r.EvidenceCount} BeatLeader PBs, {r.RatedCount} on ranked maps (BL / SS / AccSaber)");
         if (r.Profile is not { } p)
         {
             Console.WriteLine("  No rated plays — nothing to analyse.");

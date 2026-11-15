@@ -93,7 +93,7 @@ def main():
             ss, as_ = flags[key]
             maps.append({"Hash": h, "Difficulty": key[1], "Name": song.get("name", ""), "Mapper": song.get("mapper") or "",
                          "Type": int(d.get("type") or 0),
-                         "Duration": float(d.get("duration") or song.get("duration") or 0),
+                         "Duration": float(d.get("duration") or song.get("duration") or 0), "Njs": float(d.get("njs") or 0),
                          "RankedScoreSaber": ss, "RankedAccSaber": as_, "Ratings": r})
     out = os.path.join(out_dir("08_pool_ratings"), "pool_ratings.json")
     json.dump(maps, open(out, "w", encoding="utf-8"))
