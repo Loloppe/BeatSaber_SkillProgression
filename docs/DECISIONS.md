@@ -430,6 +430,60 @@ Format: ID — date — decision — rationale. Open questions listed below with
   handed-off map also gets its Solo score, a harmless duplicate). **Back arrow** (user: "easy way back"; native UI): during
   a handoff, Solo's back arrow returns to Skill Progression instead of the main menu (BetterSongSearch's route). Not done:
   Training's result line for a Solo play (Training just refreshes); "Open in Solo" (D-049) keeps returning to the main menu.
+- **D-058 — 2026-11-14 — Peer-based accuracy targets: per-map accuracy by player level, shipped in the model (user
+  idea; method approved by the user, scope still open).** Same AccSaber player: Training targets near or above the
+  map's best score (e.g. 99.5% where the best is 99.51%). Cause: polish targets on played maps are still predicted acc
+  + the next waypoint's residual (+0.4% past the last Accuracy waypoint, D-055 changed only new maps), capped at
+  current + 0.5%, and polish is ranked by distance below that target, so the maps where BL's prediction is most
+  optimistic come first. User idea: compare the player to peers of similar level and recommend the maps where they are
+  below them. **Method (option 2, adjusted bands):** offline, a robust additive fit over no-modifier scores
+  (acc[p, m] ≈ ease[m] + level[p], alternating medians, players with ≥ 30 maps of the pool) gives every population
+  player one accuracy level; per map, the model stores on a level grid the median of (acc − level + grid level) of
+  players near that level (window grown until ≥ 8 players). The plugin estimates the player's level from their own
+  PBs (Core) and reads the map's value at that level = peer target; ease[m] + level only when a map has no band.
+  Aggregate-only (D-007). Rejected: fetching each map's BeatLeader score list in the plugin (option 1: ~6 min and
+  110 MB for the AccSaber pool on first use, costly refresh, API load), peers by global BL rank (C), additive only,
+  additive fallback whenever a band is sparse, bands from recent scores only, blends. Evidence
+  (`/leaderboard/{id}/scoregraph`, verified live anonymously 2026-11-14, also on unranked maps: every score of a map
+  with player id, acc, rank, modifiers; all 611 AccSaber maps cached in data/explore/10_peers, local only): leave-one-out
+  over 24 players, mean |target − actual| 0.268 vs 0.317 additive; within 0.03–0.05 of a direct peer search (20
+  players just above + 20 just below on shared maps) for 3 of 4 named players. That player: polish targets 98.78–99.57
+  instead of 99.00–99.93 (6 of their top 10 above the map's best score today); below target on 240 of 589 maps instead
+  of 537. Known limits: the #1 player's targets are too hard (no one above, 18% at/above); a player inactive since
+  2023 gets too-easy targets (85% at/above; harmless, polish only lists maps below target). Prototype scripts were
+  throwaway (not in the repo). **Targets (user, option B):** every accuracy target the player sees — polish targets
+  and their ranking (distance below the peer target), new-map / "at your level" targets and Explore's expected acc;
+  today's rules stay as the fallback on maps without peer data. Calibration and starter targets unchanged (they aim at
+  a waypoint, not at the player's current level). **Pools (user, option C):** all ranked pools — BL-ranked maps from
+  the population DB (Scores: PlayerId, Accuracy, Modifiers; no fetch), AccSaber and SS-only maps (3,612) from
+  `/leaderboard/{id}/scoregraph`, fetched once and cached by the training pipeline. Curated maps ranked nowhere keep
+  today's rule. **Level scope (user, option C2 after a test):** one level per style × 3 difficulty bands (equal map
+  counts along the style's axis: stars for Accuracy / Extreme, pass for Midspeed / Speed, tech for High Tech; 15 cells,
+  each with its own fit and per-map bands; a map on several styles has bands per style); a player with < 10 maps in a
+  band uses the style-wide level. Test (4.2M no-modifier scores, population DB + AccSaber cache; 97 held-out players:
+  17 anchor/review, 20 of the top 400, 60 random; leave-one-out per map), mean |target − actual| / player ≥ target:
+  one level 1.728 / 60%, per style 1.539 / 53%, pass bands (style-agnostic) 1.465 / 52%, **style × 3 bands 1.445 / 50%**,
+  style × 2 bands 1.476 / 52%; best for 38 of 97 players; best on every style but High Tech (pass bands 2.134 vs
+  2.153). That player's Accuracy maps: 0.112 (one level 0.386, per style 0.152). Results in data/explore/11_level_scope
+  (local only). **Pipeline (user, option A):** the population fit runs in Python (`build_model.py`, like waypoints);
+  Core does the player side (level per cell = median of acc − shipped ease, band lookup, fallbacks); the model ships
+  band edges and per-map ease so Core never re-derives them; a CLI check compares Core's cell levels for the anchor
+  players with Python's fitted ones after each build. Rejected: a C# Tools fit through Core (B: SQLite dependency in
+  Tools, extra C# step, avoids ~3 lines of duplication). Claude defaults: `fetch_peer_scores.py` fetches scoregraphs of
+  the SS-only and AccSaber maps once (compact cache: player, acc, modifiers, date); ~16 level points per map and
+  style, each a median of ≥ 8 players. **Modifiers (user, option C):** scores count with no modifier or only OD (Old
+  Dots: BeatLeader's tag for Old Dots mode / game versions before 1.20), PM, DA, GN, BE — none changes the song speed or
+  makes the map easier — on both sides (`PeerTargets.Comparable` / `peer_targets.NEUTRAL_MODIFIERS`); speed and easier
+  modifiers keep today's targets, and once the player has a peer level on the style, Accuracy rows and Explore
+  "Improve" only list maps with a peer target, so fallback targets never mix into the ranking. Found in the first
+  build: the reporting player's top 5 Accuracy rows were all OD / PM / FS PBs on the old rule (99.4–99.5%), 243 of their
+  5,032 PBs use modifiers. **Built 2026-11-14:** `fetch_peer_scores.py` (4,167 maps, ~2.5 h first run, 108 MB cache),
+  `peer_targets.py`, Core `PeerTargets` (Training polish targets + order, new-map targets, Explore expected), CLI
+  `check-peers`; model 5.96M comparable PBs, 8,061 maps with curves, 9.4 MB gz (was 7.3); anchors 11/11; check-peers
+  median |Core − fit| ≤ 0.03% for all 17 anchor/review players. That player's Accuracy rows: 98.8–99.0% targets, 0.1–0.2%
+  above their PBs. Claude choices to confirm: new-map targets are the plain peer target (no D-055 "+ one step");
+  Explore Improve keeps its +0.2% minimum gain (short lists for top players); the 4 AccSaber maps with pass > 3 have no
+  Accuracy curve (today's rule).
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are

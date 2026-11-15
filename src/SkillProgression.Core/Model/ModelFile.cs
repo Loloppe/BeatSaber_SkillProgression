@@ -15,7 +15,41 @@ namespace SkillProgression.Core.Model
         public DestinationThresholds Thresholds { get; set; } = new DestinationThresholds();
         public LeaningParameters? Leaning { get; set; }
         public List<PathModel> Paths { get; set; } = new List<PathModel>();
+        /// <summary>Peer-based accuracy targets (D-058); null in models built before it.</summary>
+        public PeerTargetsModel? PeerTargets { get; set; }
         public List<MapEntry> Maps { get; set; } = new List<MapEntry>();
+    }
+
+    /// <summary>
+    /// D-058: per style ("Accuracy") and per style difficulty band ("Accuracy|0".."Accuracy|2"), a population fit
+    /// acc ≈ ease(map) + level(player) over no-modifier PBs. Maps carry the curves (<see cref="MapEntry.PeerTargets"/>).
+    /// </summary>
+    public sealed class PeerTargetsModel
+    {
+        /// <summary>The player's no-modifier maps needed in a band before its own band level is used (else the style's).</summary>
+        public int MinPlayerMaps { get; set; } = 10;
+        public List<PeerCellModel> Cells { get; set; } = new List<PeerCellModel>();
+    }
+
+    public sealed class PeerCellModel
+    {
+        public string Id { get; set; } = "";
+        public string Destination { get; set; } = "";
+        /// <summary>Difficulty band 0..2 along the style's axis; -1 = the whole style.</summary>
+        public int Band { get; set; } = -1;
+        public int Players { get; set; }
+        public int Maps { get; set; }
+    }
+
+    /// <summary>
+    /// One map in one cell: <see cref="Ease"/> = the map's term of the fit; <see cref="Values"/>[i] = median accuracy of
+    /// population players at level <see cref="Levels"/>[i] (ascending; each a median of ≥ 8 players).
+    /// </summary>
+    public sealed class PeerCurve
+    {
+        public double Ease { get; set; }
+        public List<double> Levels { get; set; } = new List<double>();
+        public List<double> Values { get; set; } = new List<double>();
     }
 
     /// <summary>Destination rules thresholds (rules v6, D-018..D-021). Mirrors training/explore/profiles.py THRESHOLDS.</summary>
@@ -116,6 +150,8 @@ namespace SkillProgression.Core.Model
         public Dictionary<string, PpCurve> PpCurves { get; set; } = new Dictionary<string, PpCurve>();
         /// <summary>How many players at "Destination|waypoint" newly cleared this map (recommendations, D-025).</summary>
         public Dictionary<string, int> PeerPopularity { get; set; } = new Dictionary<string, int>();
+        /// <summary>Peer target curves by cell id (D-058): "Destination" and "Destination|band"; empty when no population scores.</summary>
+        public Dictionary<string, PeerCurve> PeerTargets { get; set; } = new Dictionary<string, PeerCurve>();
     }
 
     public sealed class MapRatings

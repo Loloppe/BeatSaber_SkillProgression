@@ -104,3 +104,9 @@ Outstanding / known gaps:
 - 2026-11-14 (cont.): "To Solo" on Next up and Explore rows (D-057): opens Solo on the map's difficulty so JDFixer & co.
   apply; plays of that map from Solo are plugin plays; Solo's back arrow returns to the plugin. **Verified in-game by the user
   2026-11-14** (with the BeatLeader r2mc Heck 1.40 replay fix; test zip in data/release updated).
+- 2026-11-14 (cont.): Target / now accuracy shown with 2 decimals (Format.cs; also the delta next to targets).
+  Same AccSaber player: polish targets still near world-best → D-058 peer-based targets (per-map accuracy by player
+  level in the model), method approved after prototypes on 24 players; scope B (all targets the player sees), pools C
+  (all ranked), level per style × 3 difficulty bands (tested on 97 players), Python fit, neutral modifiers count (OD,
+  PM, DA, GN, BE) and no rule mixing in lists. Built + model rebuilt; anchors 11/11, check-peers OK, 124 + 25 tests.
+  **Awaiting in-game test** (plugin + model copied to the 1.40.8 instance).

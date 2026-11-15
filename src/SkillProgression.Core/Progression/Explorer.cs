@@ -112,6 +112,7 @@ namespace SkillProgression.Core.Progression
             public ExploreMode Mode;
             public double Level, Step, AxisMin, AxisMax;
             public AccuracyEstimator Estimator = new AccuracyEstimator(0, 0);
+            public PeerTargets Peers = PeerTargets.None;
             public List<(ExploreItem item, double rank)> Pool = new List<(ExploreItem, double)>();
         }
 
@@ -175,6 +176,7 @@ namespace SkillProgression.Core.Progression
             {
                 Path = path, Mode = mode, Step = Math.Max(0.25, spread * 0.35),
                 Estimator = AccuracyEstimator.Fit(path, rankedPlays, t),
+                Peers = PeerTargets.For(rankedPlays, model),
                 Level = level
                         ?? PathState.Compute(path, rankedPlays, t)?.Difficulty
                         ?? pathModel?.Waypoints.OrderBy(w => w.Index).FirstOrDefault()?.Difficulty ?? 0,
@@ -184,10 +186,14 @@ namespace SkillProgression.Core.Progression
             {
                 ctx.Pool = bestPlays
                     .Where(p => PathRules.IsRecommendable(catalog, p.Map, p.Ratings, path, t))
+                    // D-058: with a peer level on the style, only maps with a peer target (no mixing of rules).
+                    .Where(p => !ctx.Peers.Covers(path) || PathAnalyzer.PeerTarget(ctx.Peers, path, p) != null)
                     .Select(p => new ExploreItem
                     {
                         Map = p.Evidence.Map, Name = p.Map.Name, Mapper = p.Map.Mapper, AxisRating = PathRules.Axis(path, p.Ratings), Stars = p.Ratings.Stars, Njs = p.Map.Njs,
-                        ExpectedAccuracy = ctx.Estimator.Expected(p.Ratings, path), CurrentAccuracy = p.Accuracy,
+                        // D-058: players at their level; without peer data the estimate.
+                        ExpectedAccuracy = PathAnalyzer.PeerTarget(ctx.Peers, path, p) ?? ctx.Estimator.Expected(p.Ratings, path),
+                        CurrentAccuracy = p.Accuracy,
                     })
                     .Where(i => i.ExpectedAccuracy - i.CurrentAccuracy >= MinGain)
                     .Select(i => (i, i.ExpectedAccuracy - i.CurrentAccuracy!.Value))
@@ -205,7 +211,8 @@ namespace SkillProgression.Core.Progression
                 .Where(x => !played.Contains(x.key))
                 .Select(x => (new ExploreItem
                 {
-                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = PathRules.Axis(path, x.r), Stars = x.r.Stars, Njs = x.map.Njs, ExpectedAccuracy = ctx.Estimator.Expected(x.r, path),
+                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = PathRules.Axis(path, x.r), Stars = x.r.Stars, Njs = x.map.Njs,
+                    ExpectedAccuracy = ctx.Peers.Target(path, x.map) ?? ctx.Estimator.Expected(x.r, path),
                 }, curated ? x.map.BeatSaverScore : popularityKeys.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0)))
                 .ToList();
             return WithRange(ctx);

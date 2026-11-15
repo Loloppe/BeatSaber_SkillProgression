@@ -33,6 +33,10 @@ gridAcc[12], avg cut), winTracker, scoreGraphTracker (acc over time).
 type (map-type bit flags: 1 Acc, 2 Tech, 4 Midspeed, 8 Speed, 16 Fitbeat, 32 Linear, 64 BombAvoidance —
 see `/mod/maptypes`), modifiersRating, rankedTime. No njs/nps/duration in the lean listing (full `/leaderboards` has them).
 Rating change history: `/leaderboard/{id}` → `changes[]`.
+**All scores of a leaderboard**: `GET /leaderboard/{id}/scoregraph` (verified live anonymously 2026-11-14, also on
+unranked maps) → array of {playerId, accuracy (×100), pp, rank, playerRank, modifiers, timepost, pauses, mistakes, …,
+playerName/avatar}. One call per map, no paging/time filter; AccSaber pool: 611 calls ≈ 6 min at ~3/s, 110 MB raw,
+median 426 scores per map, max 6,733 (D-058).
 **Ratings exist for unranked maps too** (user, verified 2026-11-10 anonymously via `/leaderboards/hash/{hash}`:
 an SS-only and an AccSaber-only map, status 0, returned stars/pass/acc/tech/predictedAcc). Map `type` may be 0
 (untagged) on unranked maps. No pp/rank for unranked maps.

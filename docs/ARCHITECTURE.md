@@ -36,7 +36,8 @@ Fresh start (D-010) = evidence filter (ignore/decay before a date) + calibration
   typical equivalent rank).
 - `maps[]`: per BL-ranked difficulty: MapKey, ratings per speed modifier (none/SS/FS/SF: stars, pass, acc, tech,
   predicted acc), name + mapper, map type, duration, NJS (D-056, 0 = unknown), pool flags (BL/SS/AccSaber, D-023), **pp lookup curve per speed modifier**,
-  peer popularity per (path, waypoint), `Curated` + `BeatSaverScore` (D-045). Also curated maps ranked nowhere
+  peer popularity per (path, waypoint), `Curated` + `BeatSaverScore` (D-045), `PeerTargets` by cell ("Style" and
+  "Style|band": ease + accuracy at ~16 population levels, D-058; top-level `PeerTargets` lists the cells). Also curated maps ranked nowhere
   (ratings only, empty pp curves): Explore's Curated pool only — the progression engine never sees them.
 - Size estimate: a few MB raw, ~1–2 MB gzipped.
 

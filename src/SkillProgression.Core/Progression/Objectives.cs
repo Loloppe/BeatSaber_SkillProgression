@@ -25,8 +25,9 @@ namespace SkillProgression.Core.Progression
         /// <summary>Note jump speed, 0 = unknown (D-056).</summary>
         public double Njs { get; set; }
         /// <summary>
-        /// Accuracy to aim for. Played maps (polish): predicted acc + next waypoint's typical residual. New maps (push,
-        /// D-055): the player's expected acc on the map + one short-term accuracy step.
+        /// Accuracy to aim for: what players at the player's level get on the map (D-058, <see cref="PeerTargets"/>).
+        /// Without peer data: played maps (polish) predicted acc + next waypoint's typical residual; new maps (push, D-055)
+        /// the player's expected acc on the map + one short-term accuracy step.
         /// </summary>
         public double TargetAccuracy { get; set; }
         /// <summary>Player's best accuracy on it so far (polish), null when never cleared (push).</summary>
@@ -136,6 +137,7 @@ namespace SkillProgression.Core.Progression
             // replayed ones, so first attempts on new maps fell ~0.3% short (player feedback 2026-11-14).
             var estimator = AccuracyEstimator.Fit(path, bestPlays, model.Thresholds);
             var accuracyStep = Math.Max(0, next.AccuracyResidual - state.AccuracyResidual) / TrainingPlanner.StepsPerWaypointGap;
+            var peers = PeerTargets.For(bestPlays, model);
 
             List<MapRecommendation> NewMaps(double low, double high, double centre) => Diversify(catalog.Recommendable(path)
                 .Where(m => !played.ContainsKey(Key(m)) && m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
@@ -144,7 +146,8 @@ namespace SkillProgression.Core.Progression
                 .Select(x => new MapRecommendation
                 {
                     Map = Key(x.map), Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars, Njs = x.map.Njs,
-                    TargetAccuracy = Math.Min(MaxTargetAccuracy, estimator.Expected(x.map.Ratings[""], path) + accuracyStep),
+                    TargetAccuracy = peers.Target(path, x.map)
+                                     ?? Math.Min(MaxTargetAccuracy, estimator.Expected(x.map.Ratings[""], path) + accuracyStep),
                     PeerPopularity = x.map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
                 })
                 .OrderByDescending(r => r.PeerPopularity).ThenBy(r => Math.Abs(r.AxisRating - centre)), catalog);
@@ -163,6 +166,8 @@ namespace SkillProgression.Core.Progression
             // beating the predicted accuracy is harder. Falls back to their own level when nothing was played there.
             var polishCandidates = played.Values
                 .Where(p => PathRules.IsRecommendable(catalog, p.Map, p.Ratings, path, model.Thresholds))
+                // D-058: with a peer level on the style, only maps with a peer target (no mixing with the residual rule).
+                .Where(p => !peers.Covers(path) || PeerTarget(peers, path, p) != null)
                 .Select(p => (play: p, axis: PathRules.Axis(path, p.Ratings)))
                 .ToList();
             var polishCentre = state.Difficulty;
@@ -179,10 +184,11 @@ namespace SkillProgression.Core.Progression
                     .Select(x => new MapRecommendation
                     {
                         Map = x.play.Evidence.Map, Name = x.play.Map.Name, Mapper = x.play.Map.Mapper, AxisRating = x.axis, Stars = x.play.Ratings.Stars, Njs = x.play.Map.Njs,
-                        TargetAccuracy = x.play.Ratings.PredictedAcc + next.AccuracyResidual,
+                        TargetAccuracy = PeerTarget(peers, path, x.play) ?? x.play.Ratings.PredictedAcc + next.AccuracyResidual,
                         CurrentAccuracy = x.play.Accuracy,
                         PeerPopularity = x.play.Map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
                     })
+                    // D-058: furthest below players at their level first.
                     .Where(r => r.CurrentAccuracy < r.TargetAccuracy)
                     .OrderBy(r => r.CurrentAccuracy - r.TargetAccuracy), catalog),
             };
@@ -317,6 +323,10 @@ namespace SkillProgression.Core.Progression
             result.AddRange(skipped.Take(MapsPerObjective - result.Count));
             return result;
         }
+
+        /// <summary>Peer target on a played map; null when its PB isn't comparable (speed / easier modifiers) or no data.</summary>
+        internal static double? PeerTarget(PeerTargets peers, string path, RatedPlay play) =>
+            PeerTargets.Comparable(play.Evidence) ? peers.Target(path, play.Map) : null;
 
         private static MapKey Key(MapEntry m) => new MapKey(m.Hash, m.Characteristic, m.Difficulty);
         private static double Positive(double x) => x > 0 ? x : 1;

@@ -38,8 +38,9 @@ BeatLeader scores into a structured, in-game skill progression experience. UI us
 - Feature extraction & player inference exist ONLY in Core (shared by CLI and plugin) — never reimplement in Python.
 - Raw attempts / per-player population records must never be committed or published (D-007).
 - Model: `cd training && .venv/Scripts/python fetch_pool_ratings.py` (SS/AccSaber maps' BL ratings, cached; D-041)
-  and `.venv/Scripts/python fetch_curated.py` (BeatSaver curated maps' BL ratings, cached; ~1 h first run; D-045) then `.venv/Scripts/python build_model.py` → `data/model/model.json.gz` (needs explorations 02–06 outputs in data/explore). CLI: `dotnet run --project tools/SkillProgression.Tools -- player <blId>` and
-  `-- check-anchors` (must stay 11/11 after any rules/model change).
+  and `.venv/Scripts/python fetch_curated.py` (BeatSaver curated maps' BL ratings, cached; ~1 h first run; D-045) and
+  `.venv/Scripts/python fetch_peer_scores.py` (every BL score on the SS/AccSaber maps, compact cache, local only; hours first run; D-058) then `.venv/Scripts/python build_model.py` → `data/model/model.json.gz` (needs explorations 02–06 outputs in data/explore). CLI: `dotnet run --project tools/SkillProgression.Tools -- player <blId>` and
+  `-- check-anchors` (must stay 11/11 after any rules/model change) and `-- check-peers` (Core's peer levels vs the fit, D-058).
 - Dev environment for Reactive v2 + BeatLeader: installed in the 1.40.8 instance (D-016); see `tools/dev-env/README.md`.
 - Population DB (D-015): `../portaBLerebalancer2/wwwroot/db-20261104211323-3944.db` — open read-only.
 - Player-specific data (anchor/review Steam IDs) lives only in `data/anchors.json` (gitignored). Never put player

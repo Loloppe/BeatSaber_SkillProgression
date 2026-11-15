@@ -8,6 +8,7 @@ using SkillProgression.Data.Model;
 // SkillProgression.Tools — offline/dev commands (docs/ARCHITECTURE.md).
 //   player <beatleaderId> [--model <path>] [--since yyyy-MM-dd] [--path "<destination>"]
 //   check-anchors [--model <path>]       user anchor players (D-018..D-021) through the live API + Core
+//   check-peers [--model <path>]         D-058: Core's peer levels vs the ones build_model.py fitted (anchor/review players)
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
@@ -60,6 +61,32 @@ switch (args[0])
         Console.WriteLine($"{ok}/{anchors.Count} anchors match (live BL data vs population snapshot of 2026-10-28).");
         return ok == anchors.Count ? 0 : 1;
     }
+    case "check-peers":
+    {
+        // build_model.py writes the fitted levels of the anchor/review players next to the peer score cache (local only).
+        var fittedPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(modelPath))!, "..", "explore", "12_peer_scores", "fitted_levels.json");
+        if (model.PeerTargets == null || !File.Exists(fittedPath))
+        {
+            Console.Error.WriteLine("No peer targets in the model or no fitted_levels.json — run training/build_model.py.");
+            return 2;
+        }
+        var fitted = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, Dictionary<string, double>>>(File.ReadAllText(fittedPath))!;
+        var worst = 0.0;
+        foreach (var (id, cells) in fitted)
+        {
+            var rated = (await beatLeader.GetAllScoresAsync(id)).Select(engine.Catalog.Rate).Where(r => r != null).Select(r => r!).ToList();
+            var peers = PeerTargets.For(ProfileBuilder.BestPerMap(rated), model);
+            var diffs = cells.Select(c => (cell: c.Key, d: peers.Level(c.Key) is double core ? core - c.Value : (double?)null)).ToList();
+            var known = diffs.Where(x => x.d != null).Select(x => Math.Abs(x.d!.Value)).OrderBy(x => x).ToList();
+            var median = known.Count == 0 ? 0 : known[known.Count / 2];
+            worst = Math.Max(worst, median);
+            Console.WriteLine($"{id,-18} cells {known.Count}/{cells.Count}  median |core - fitted| {median * 100:F3}%  max {(known.Count == 0 ? 0 : known[^1]) * 100:F3}%" +
+                              (known.Count == 0 ? "" : $" ({diffs.Where(x => x.d != null).OrderByDescending(x => Math.Abs(x.d!.Value)).First().cell})"));
+        }
+        // Live PBs vs the population snapshot differ a little (new scores since); a large median means the two sides drifted.
+        Console.WriteLine(worst <= 0.002 ? "OK - Core matches the fit." : "DIFF - a player's median gap exceeds 0.2%: check the level definition on both sides.");
+        return worst <= 0.002 ? 0 : 1;
+    }
     default:
         return Usage();
 }
@@ -68,6 +95,7 @@ static int Usage()
 {
     Console.Error.WriteLine("usage: player <beatleaderId> [--model path] [--since yyyy-MM-dd] [--path \"High Tech\"]");
     Console.Error.WriteLine("       check-anchors [--model path]");
+    Console.Error.WriteLine("       check-peers [--model path]");
     return 1;
 }
 

@@ -63,8 +63,8 @@ internal static class Format
         string.Join("        ", steps.Select(s => s.Kind == ObjectiveKind.Push
             ? s.AtLevel ? $"Next clear target - new maps around {s.Target:F2} {AxisLong(path)}"
             : $"Next clear target - {s.Target:F2} {AxisLong(path)}"
-            : state == null ? $"Next accuracy target - {s.Target - s.Current:+0.0%} average accuracy"
-            : $"Next accuracy target - {Math.Min(1, state.Accuracy + s.Target - s.Current):P1} ({s.Target - s.Current:+0.0%})"));
+            : state == null ? $"Next accuracy target - {s.Target - s.Current:+0.00%} average accuracy"
+            : $"Next accuracy target - {Math.Min(1, state.Accuracy + s.Target - s.Current):P2} ({s.Target - s.Current:+0.00%})"));
 
     public static ExploreRow ExploreRow(string path, ExploreItem i, bool downloaded)
     {
@@ -119,10 +119,10 @@ internal static class Format
         var r = n.Recommendation;
         // Columns at fixed positions (TMP <pos>) so ratings and targets line up from row to row.
         var kind = n.Kind == ObjectiveKind.Push ? "Clear" : "Accuracy";
-        var now = r.CurrentAccuracy is double c ? $"<pos=54%>now {c:P1}" : "<pos=54%>now 0%";
+        var now = r.CurrentAccuracy is double c ? $"<pos=54%>now {c:P2}" : "<pos=54%>now 0%";
         var misses = n.Demoted ? "<pos=74%>moved down" : n.RecentMisses > 0 ? $"<pos=74%>{n.RecentMisses} miss" + (n.RecentMisses > 1 ? "es" : "") : "";
         return new NextUpRow(r.Map, Title(r.Mapper, r.Name, r.Map.Difficulty, r.Stars, r.Njs),
-            $"{kind}<pos=14%>{Axis(path)} {r.AxisRating:F2}<pos=32%>target {n.TargetAccuracy:P1}{now}{misses}", downloaded ? "Play" : "Get & Play");
+            $"{kind}<pos=14%>{Axis(path)} {r.AxisRating:F2}<pos=32%>target {n.TargetAccuracy:P2}{now}{misses}", downloaded ? "Play" : "Get & Play");
     }
 
     /// <summary>Progress of something not finished: rounded down, never "100%".</summary>
@@ -141,8 +141,8 @@ internal static class Format
         if (record.Outcome == PlayOutcome.Failed || record.SoftFailed) return "Failed - it stays in your list (3 misses move it down).";
         var delta = record.Accuracy - item.TargetAccuracy;
         return delta >= 0
-            ? $"{record.Accuracy:P2} - target {item.TargetAccuracy:P1} reached ✓"
-            : $"{record.Accuracy:P2} - target {item.TargetAccuracy:P1} ({delta:+0.0%;-0.0%}). Try again or skip.";
+            ? $"{record.Accuracy:P2} - target {item.TargetAccuracy:P2} reached ✓"
+            : $"{record.Accuracy:P2} - target {item.TargetAccuracy:P2} ({delta:+0.00%;-0.00%}). Try again or skip.";
     }
 
     /// <summary>Result of a calibration map (D-040): the first clear or fail counts and the map is replaced, so no retry.</summary>
@@ -153,8 +153,8 @@ internal static class Format
         if (record.Outcome == PlayOutcome.Failed || record.SoftFailed) return "Failed - counted, calibration steps down to easier maps.";
         var delta = record.Accuracy - item.TargetAccuracy;
         return delta >= 0
-            ? $"{record.Accuracy:P2} - target {item.TargetAccuracy:P1} reached ✓ - calibration steps up."
-            : $"{record.Accuracy:P2} - target {item.TargetAccuracy:P1} ({delta:+0.0%;-0.0%}) - counted, calibration steps down.";
+            ? $"{record.Accuracy:P2} - target {item.TargetAccuracy:P2} reached ✓ - calibration steps up."
+            : $"{record.Accuracy:P2} - target {item.TargetAccuracy:P2} ({delta:+0.00%;-0.00%}) - counted, calibration steps down.";
     }
 
     /// <summary>User format: [E] Easy, [N] Normal, [H] Hard, [Ex] Expert, [Ex+] Expert+.</summary>
