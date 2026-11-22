@@ -15,6 +15,7 @@ using SkillProgression.Data.BeatLeader;
 using SkillProgression.Data.Model;
 using SkillProgression.Data.Platforms;
 using SkillProgression.Data.Plays;
+using SkillProgression.Data.ScoreSaber;
 using SkillProgression.Data.State;
 
 namespace SkillProgression.Plugin.Services;
@@ -35,6 +36,10 @@ internal sealed class TrainingSnapshot
     public bool Offline { get; init; }
     /// <summary>Achievements unlocked by this refresh (not retroactive): celebrated in the UI.</summary>
     public IReadOnlyList<Achievement> NewAchievements { get; init; } = Array.Empty<Achievement>();
+    /// <summary>ScoreSaber pool without any ScoreSaber score (no profile, or none synced yet, D-062).</summary>
+    public bool NoScoreSaberScores { get; init; }
+    /// <summary>Style mix from ScoreSaber scores, weighted by SS pp ("YOUR STYLE" with the ScoreSaber pool).</summary>
+    public StyleMix ScoreSaberStyleMix { get; init; } = new();
 }
 
 /// <summary>Achievements screen data.</summary>
@@ -67,6 +72,10 @@ internal sealed class ProgressionService
     /// </summary>
     private readonly ScoreCache _unrankedCache;
     private IReadOnlyList<PlayEvidence> _unrankedScores = Array.Empty<PlayEvidence>();
+    /// <summary>Ranked ScoreSaber scores: evidence for the ScoreSaber-measured styles only (D-062).</summary>
+    private readonly ScoreSaberScoreCache _scoreSaberCache;
+    private IReadOnlyList<PlayEvidence> _scoreSaberScores = Array.Empty<PlayEvidence>();
+    private readonly ScoreSaberClient _scoreSaber;
     private readonly BeatLeaderClient _beatLeader;
     private readonly PlatformStatsClient _platforms;
     /// <summary>Live per-map platform data for rows and cards (D-060).</summary>
@@ -80,8 +89,11 @@ internal sealed class ProgressionService
 
     public UserState State { get; private set; }
 
-    public ProgressionService(string dataDir, PlayLogStore playLog, BeatLeaderClient beatLeader, PlatformStatsClient platforms, LiveMapClient live)
+    public ProgressionService(string dataDir, PlayLogStore playLog, BeatLeaderClient beatLeader, PlatformStatsClient platforms, LiveMapClient live,
+        ScoreSaberClient scoreSaber)
     {
+        _scoreSaber = scoreSaber;
+        _scoreSaberCache = new ScoreSaberScoreCache(Path.Combine(dataDir, "scoresaber-scores.json"));
         _live = live;
         _dataDir = dataDir;
         _playLog = playLog;
@@ -131,19 +143,39 @@ internal sealed class ProgressionService
         SaveState();
     }
 
+    /// <summary>
+    /// Focuses a style, or an AccSaber track (D-061: saved apart, so each pool keeps its own focus). A ScoreSaber style
+    /// (D-062) shares the style focus.
+    /// </summary>
     public void SetFocus(string path)
     {
-        State.FocusPath = path;
+        path = ScoreSaberStyles.Style(path);
+        if (AccSaberTracks.IsTrack(path)) State.AccSaberFocus = path;
+        else State.FocusPath = path;
         if (!State.Paths.Contains(path)) State.Paths.Add(path);
         SaveState();
     }
 
-    /// <summary>AccSaber is an accuracy pool: choosing it also focuses the Accuracy style (user, 2026-11-11).</summary>
+    /// <summary>AccSaber pool: Training follows the AccSaber tracks instead of the styles (D-061).</summary>
     public void SetMapPool(MapPool pool)
     {
         State.MapPool = pool;
-        if (pool == MapPool.AccSaber) SetFocus(Destinations.Accuracy);
-        else SaveState();
+        SaveState();
+    }
+
+    /// <summary>
+    /// The focus for the current pool: the saved AccSaber track with the AccSaber pool (else the track with the most AP),
+    /// the saved style otherwise (else the suggested one). Null report = no suggestion (callers' own default).
+    /// </summary>
+    public string Focus(PlayerReport? report = null)
+    {
+        if (State.MapPool == MapPool.AccSaber)
+            return !string.IsNullOrEmpty(State.AccSaberFocus) ? State.AccSaberFocus
+                : report == null ? AccSaberTracks.TrueAcc
+                : AccSaberTracks.All.OrderByDescending(t => report.Paths.TryGetValue(t, out var p) ? p.State.PathPp : 0).First();
+        var style = !string.IsNullOrEmpty(State.FocusPath) ? State.FocusPath : report == null ? "" : SuggestFocus(report);
+        // ScoreSaber pool (D-062): the same style, measured on ScoreSaber.
+        return State.MapPool == MapPool.ScoreSaber && style.Length > 0 ? ScoreSaberStyles.Id(style) : style;
     }
 
     public void Skip(MapKey map)
@@ -152,13 +184,6 @@ internal sealed class ProgressionService
         // Skipping the calibration map: drop the pick so the next refresh chooses another one at the same level.
         foreach (var c in State.Calibrations.Values)
             if (c.Picks.Count > 0 && c.Picks[c.Picks.Count - 1].Map == map.ToString()) c.Picks.RemoveAt(c.Picks.Count - 1);
-        SaveState();
-    }
-
-    /// <summary>Skips the focus style's calibration: starter maps use a cautious level from the old profile (D-040).</summary>
-    public void SkipCalibration(string path)
-    {
-        State.Calibration(path).Skipped = true;
         SaveState();
     }
 
@@ -182,16 +207,18 @@ internal sealed class ProgressionService
             {
                 if (sync)
                 {
-                    // Ranked fill the first half of the import bar, unranked the second.
+                    // Ranked, unranked then ScoreSaber scores fill the import bar.
                     _beatLeaderScores = await _scoreCache.SyncAsync(_beatLeader, playerId, DateTime.UtcNow, ct,
-                        Scaled(progress, 0, 0.5));
+                        Scaled(progress, 0, 0.4));
                     _unrankedScores = await _unrankedCache.SyncAsync(_beatLeader, playerId, DateTime.UtcNow, ct,
-                        Scaled(progress, 0.5, 0.5));
+                        Scaled(progress, 0.4, 0.4));
+                    await SyncScoreSaberAsync(playerId, Scaled(progress, 0.8, 0.2), ct);
                 }
                 else
                 {
                     if (_beatLeaderScores.Count == 0) _beatLeaderScores = _scoreCache.Cached();
                     if (_unrankedScores.Count == 0) _unrankedScores = _unrankedCache.Cached();
+                    if (_scoreSaberScores.Count == 0) _scoreSaberScores = _scoreSaberCache.Cached();
                 }
             }
             catch (Exception e) when (!(e is OperationCanceledException))
@@ -199,6 +226,7 @@ internal sealed class ProgressionService
                 Plugin.Log.Warn($"BeatLeader sync failed, using cached scores: {e.Message}");
                 _beatLeaderScores = _scoreCache.Cached();
                 _unrankedScores = _unrankedCache.Cached();
+                _scoreSaberScores = _scoreSaberCache.Cached();
                 offline = true;
             }
         }
@@ -217,14 +245,27 @@ internal sealed class ProgressionService
         {
             var log = _playLog.ReadAll(out _);
             var evidence = Evidence(log);
-            var report = _engine!.Analyze(evidence, Destinations.All, Since);
+            // AccSaber tracks too, whatever the pool: their milestones count as achievements (D-061).
+            var report = _engine!.Analyze(evidence, Destinations.All.Concat(AccSaberTracks.All), Since);
+            // ScoreSaber styles on ScoreSaber's own scores (D-062), whatever the pool, so their milestones accrue too.
+            var ssEvidence = ScoreSaberEvidence(log);
+            var ssReport = _engine.Analyze(ssEvidence, ScoreSaberStyles.All, Since);
+            var ssMix = StyleMixCalculator.ComputeScoreSaber(ssEvidence.Where(e => Since == null || e.TimeUtc >= Since.Value)
+                .Select(_engine.Catalog.Rate).Where(r => r != null).Select(r => r!), _model!.Thresholds);
+            foreach (var kv in ssReport.Paths) report.Paths[kv.Key] = kv.Value;
+            foreach (var kv in ssReport.Starters) report.Starters[kv.Key] = kv.Value;
             var newAchievements = TrackProgress(report, evidence);
 
-            var focus = State.MapPool == MapPool.AccSaber ? Destinations.Accuracy
-                : string.IsNullOrEmpty(State.FocusPath) ? SuggestFocus(report) : State.FocusPath;
-            var (calibration, startLevel) = Calibrate(focus, report, log, evidence);
+            var focus = Focus(report);
+            if (State.MapPool == MapPool.AccSaber && string.IsNullOrEmpty(State.AccSaberFocus))
+            {
+                State.AccSaberFocus = focus; // the suggestion sticks, so Explore and Achievements open on it too
+                SaveState();
+            }
+            var focusEvidence = ScoreSaberStyles.IsSsPath(focus) ? ssEvidence : evidence;
+            var (calibration, startLevel) = Calibrate(focus, report, log, focusEvidence);
             if (startLevel is double level && !report.Paths.ContainsKey(focus)
-                && _engine.Analyze(evidence, new[] { focus }, Since, new Dictionary<string, double> { [focus] = level })
+                && _engine.Analyze(focusEvidence, new[] { focus }, Since, new Dictionary<string, double> { [focus] = level })
                     .Starters.TryGetValue(focus, out var levelled))
                 report.Starters[focus] = levelled;
             report.Paths.TryGetValue(focus, out var path);
@@ -241,11 +282,13 @@ internal sealed class ProgressionService
                 Steps = calibration == null ? path?.Objectives.Select(o => TrainingPlanner.Step(o, steps)).ToList() ?? new List<ShortTermStep>() : new List<ShortTermStep>(),
                 NextUp = calibration != null ? CalibrationItems(calibration)
                     : path != null
-                    ? TrainingPlanner.NextUp(path, log, State.SkippedKeys(), stepsPerGap: steps)
-                    : TrainingPlanner.NextUpFromObjectives(starter != null ? new[] { starter } : Array.Empty<Objective>(), log, State.SkippedKeys(), stepsPerGap: steps),
+                    ? TrainingPlanner.NextUp(path, log, State.SkippedKeys())
+                    : TrainingPlanner.NextUpFromObjectives(starter != null ? new[] { starter } : Array.Empty<Objective>(), log, State.SkippedKeys()),
                 LastSyncUtc = _scoreCache.LastSyncUtc,
                 Offline = offline,
                 NewAchievements = newAchievements,
+                NoScoreSaberScores = State.MapPool == MapPool.ScoreSaber && _scoreSaberScores.Count == 0,
+                ScoreSaberStyleMix = ssMix,
             };
         }
     }
@@ -315,6 +358,31 @@ internal sealed class ProgressionService
         .Concat(log.Where(p => p.IsPass() && !p.Practice).Select(ToEvidence))
         .ToList();
 
+    /// <summary>
+    /// D-062 (user): ScoreSaber styles count ScoreSaber's own scores, plus plays made through the plugin (and Solo) until
+    /// ScoreSaber has them; BeatLeader scores never count there.
+    /// </summary>
+    private List<PlayEvidence> ScoreSaberEvidence(IReadOnlyList<PlayRecord> log) => _scoreSaberScores
+        .Concat(_soloScores.All())
+        .Concat(log.Where(p => p.IsPass() && !p.Practice).Select(ToEvidence))
+        .ToList();
+
+    /// <summary>Evidence a path is measured on: ScoreSaber's for ScoreSaber styles, BeatLeader's otherwise.</summary>
+    private List<PlayEvidence> EvidenceFor(string path, IReadOnlyList<PlayRecord> log) =>
+        ScoreSaberStyles.IsSsPath(path) ? ScoreSaberEvidence(log) : Evidence(log);
+
+    /// <summary>A player without a ScoreSaber profile just has no ScoreSaber scores; other failures keep the cache.</summary>
+    private async Task SyncScoreSaberAsync(string playerId, IProgress<double>? progress, CancellationToken ct)
+    {
+        try { _scoreSaberScores = await _scoreSaberCache.SyncAsync(_scoreSaber, playerId, DateTime.UtcNow, ct, progress); }
+        catch (ScoreSaberException) { _scoreSaberScores = Array.Empty<PlayEvidence>(); }
+        catch (Exception e) when (!(e is OperationCanceledException))
+        {
+            Plugin.Log.Warn($"ScoreSaber sync failed, using cached scores: {e.Message}");
+            _scoreSaberScores = _scoreSaberCache.Cached();
+        }
+    }
+
     private async Task EnsureEngineAsync(CancellationToken ct)
     {
         if (_engine != null) return;
@@ -322,6 +390,7 @@ internal sealed class ProgressionService
         _engine = new ProgressionEngine(_model);
         if (_beatLeaderScores.Count == 0) _beatLeaderScores = _scoreCache.Cached();
         if (_unrankedScores.Count == 0) _unrankedScores = _unrankedCache.Cached();
+        if (_scoreSaberScores.Count == 0) _scoreSaberScores = _scoreSaberCache.Cached();
     }
 
     /// <summary>Maps a sync's 0..1 progress onto [start, start + length] of the overall bar.</summary>
@@ -393,7 +462,7 @@ internal sealed class ProgressionService
         return await Task.Run(() =>
         {
             var log = _playLog.ReadAll(out _);
-            var all = Evidence(log);
+            var all = EvidenceFor(path, log);
             // D-047: slider 0 = the difficulty Training works at on this style (same evidence, ranked maps only); after a
             // fresh start, starter maps aim at the calibrated level as in Training.
             var startLevel = FreshStartLevel(path, log, all);
@@ -466,7 +535,7 @@ internal sealed class ProgressionService
     /// <summary>A plugin play on a map of this style (effective ratings, speed modifiers included).</summary>
     private bool OnPath(PlayRecord p, string path) =>
         p.Hash.Length > 0 && p.Difficulty.Length > 0
-        && _engine!.Catalog.Rate(ToEvidence(p)) is { } rated && PathRules.IsRelevant(path, rated.Ratings, _model!.Thresholds);
+        && _engine!.Catalog.Rate(ToEvidence(p)) is { } rated && PathRules.IsRelevant(path, rated, _model!.Thresholds);
 
     private List<NextUpItem> CalibrationItems(CalibrationStatus status)
     {

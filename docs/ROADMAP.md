@@ -122,3 +122,36 @@ Outstanding / known gaps:
   BeatLeader `/pp/curve`, ScoreSaber and AccSaber curves (formulas verified on live scores). Training Next up and
   Explore. Builds; 143 + 30 tests; live smoke test of the client OK; plugin copied to the 1.40.8 instance.
   **Awaiting in-game test** (hover in VR / FPFC, card placement and width, "→" glyph in the game font, cover loading).
+  Test zip in data/release updated (plugin from commit 3975b41, Release build; model unchanged), previous one kept as
+  .2026-11-15.zip.
+- 2026-11-22 (cont.): AccSaber pool → three category tracks True Acc / Standard Acc / Tech Acc (D-061, revises D-048's
+  style lock). User choices: separate tracks (own level, steps, calibration, peer targets, focus, achievements);
+  AccSaber-native definition (complexity axis, AP with AccSaber's weights — weight curve verified exact on 2 players —
+  waypoints at AccSaber category rank milestones, cross-sectional); scope Training + Explore + Achievements. New
+  `training/fetch_accsaber.py` (categories, curves, AP at rank milestones, BL scores on the 47 BL-ranked AccSaber maps)
+  and `training/accsaber_tracks.py`; peer cells per track; model rebuilt (8 paths: 6 / 9 / 10 track waypoints; 9.7 MB
+  gz; previous model kept as data/model/model.2026-11-15.json.gz). Core AP of the True Acc #1 = 10,816.9 = live.
+  Anchors 11/11, check-peers OK, 150 + 30 tests; plugin + model copied to the 1.40.8 instance.
+  **Awaiting in-game test** (track buttons swap with the pool in Training / Explore / Achievements, header "AccSaber
+  True Acc rank …", Next up / Explore on complexity, no burst of track achievements on first load). Release zip not
+  rebuilt. Then (user): AccSaber bans NO / NB / SS / Small Notes, everything else counts (PM, speed modifiers — matches
+  live scores); track AP follows that rule, model rebuilt (True Acc gains a 7th milestone), anchors 11/11, check-peers
+  OK, 158 + 30 tests, plugin + model copied again. No Fail stays excluded (user). Tracks made accuracy-only (user):
+  no "clear harder maps" objective, new maps only around the player's complexity, bar on AP + accuracy, rows "Reach
+  this acc"; 159 + 30 tests, anchors 11/11, plugin copied. Then (user, option 2): track new maps
+  ranked by the AP they'd add at their target, popularity only for ties (Next up, Explore Never played); 163 + 30
+  tests, anchors 11/11, plugin copied. Earlier question: how ScoreSaber
+  works (pool filter on BL progression, BL scores only, SS pp on rows) — possible SS-native tracks to discuss.
+- 2026-11-22 (cont.): ScoreSaber pool → the five styles measured on ScoreSaber (D-062; user: five styles, SS scores +
+  plugin plays, defaults a–f). SS API facts verified (player scores, 0.965 weights exact, pp from base accuracy, NF
+  halves). New fetch_scoresaber.py / scoresaber_styles.py, ScoreSaber score sync in Data, SS paths in Core + plugin.
+  Model rebuilt (13 paths, 9.9 MB gz); Core SS pp matches live; anchors 11/11, check-peers OK, 168 + 35 tests; plugin
+  + model copied. Accuracy / Midspeed SS milestones were too generous → gated on accuracy (user), placements now sensible; 169 + 35
+  tests, anchors 11/11, plugin copied again.
+  **Awaiting in-game test** (SS sync on first load, SS header "ScoreSaber rank …", styles switch with the pool).
+- 2026-11-22 (cont.): User review round → D-063: Skip calibration removed; start-mode texts name all platforms;
+  improve rows aim at the full peer target (per-map +0.5% step removed) and peer curves stop at their top; "YOUR STYLE"
+  follows the pool (BL mix / SS-pp mix / AccSaber AP per track); History "BL … milestones"; Achievements ranked-system
+  dropdown; Achievements overlap fixed; small grey note under the step line ("Typical pass
+  rating and average accuracy of your top 15 Midspeed plays"). 169 + 35 tests, anchors 11/11, check-peers OK, plugin copied.
+  **Awaiting in-game test** (Achievements row layout with the dropdown, YOUR STYLE per pool, improve targets).

@@ -21,34 +21,45 @@ internal static class Format
 {
     private const string Sep = "   |   ";
 
-    public static string Axis(string path) => path switch
+    public static string Axis(string path) => ScoreSaberStyles.Style(path) switch
     {
         Destinations.Speed or Destinations.Midspeed => "pass",
         Destinations.HighTech => "tech",
+        _ when AccSaberTracks.IsTrack(path) => "complexity",
         _ => "stars",
     };
 
-    private static string AxisLong(string path) => path switch
+    private static string AxisLong(string path) => ScoreSaberStyles.Style(path) switch
     {
         Destinations.Speed or Destinations.Midspeed => "pass rating",
         Destinations.HighTech => "tech rating",
+        _ when AccSaberTracks.IsTrack(path) => "complexity",
         _ => "stars",
     };
 
     /// <summary>Style mix for the platforms panel: one style per line.</summary>
-    public static string StyleMixLines(PlayerReport report)
+    public static string StyleMixLines(StyleMix mix)
     {
-        var lines = report.StyleMix.Shares.Where(kv => kv.Value >= 0.01).OrderByDescending(kv => kv.Value)
-            .Select(kv => $"{kv.Key} {kv.Value:P0}{(report.StyleMix.Established.Contains(kv.Key) ? " ✓" : "")}");
+        var lines = mix.Shares.Where(kv => kv.Value >= 0.01).OrderByDescending(kv => kv.Value)
+            .Select(kv => $"{kv.Key} {kv.Value:P0}{(mix.Established.Contains(kv.Key) ? " ✓" : "")}");
         var text = string.Join("\n", lines);
         return text.Length == 0 ? "No style yet" : text;
     }
+
+    /// <summary>"YOUR STYLE" with the AccSaber pool (D-061): AP and milestone per category track.</summary>
+    public static string AccSaberTrackLines(PlayerReport report) => string.Join("\n", AccSaberTracks.All.Select(t =>
+        report.Paths.TryGetValue(t, out var p)
+            ? $"{t}  {p.State.PathPp:N0} AP   milestone {p.Current!.Index + 1}/{p.WaypointCount}"
+            : $"{t}  not enough plays yet"));
 
     /// <summary>"Milestone" instead of waypoint, average global rank instead of "players here" (user wording).</summary>
     public static string Milestone(PathProgress? p, bool starter)
     {
         if (p == null) return starter ? "Getting started - easier maps for this style" : "";
-        return $"Milestone {p.Current!.Index + 1}/{p.WaypointCount}{Sep}Average global rank {p.Current.EquivalentRank:N0}";
+        // AccSaber tracks (D-061): milestones are AccSaber's own ranks in the category.
+        var rank = AccSaberTracks.IsTrack(p.State.Path) ? $"AccSaber {p.State.Path} rank"
+            : ScoreSaberStyles.IsSsPath(p.State.Path) ? "ScoreSaber rank" : "Average global rank";
+        return $"Milestone {p.Current!.Index + 1}/{p.WaypointCount}{Sep}{rank} {p.Current.EquivalentRank:N0}";
     }
 
     /// <summary>Fresh-start calibration header (D-040).</summary>
@@ -63,19 +74,45 @@ internal static class Format
 
     /// <summary>
     /// Polish steps are in acc vs predicted; shown as the average accuracy to reach on the style's top plays (same
-    /// weights, so a residual gain is the same accuracy gain) plus the gain, e.g. "95.5% (+0.6%)" (user, 2026-11-11).
+    /// weights, so a residual gain is the same accuracy gain) plus the gain, e.g. "95.50% (+0.60%)" (user, 2026-11-11).
+    /// What the targets are measured on is on the line below (<see cref="StepsNote"/>).
     /// </summary>
+    /// <remarks>AccSaber tracks (D-061, user): accuracy targets only, no clear target.</remarks>
     public static string Steps(string path, PathState? state, IReadOnlyList<ShortTermStep> steps) =>
-        string.Join("        ", steps.Select(s => s.Kind == ObjectiveKind.Push
+        string.Join("        ", Shown(path, steps).Select(s => s.Kind == ObjectiveKind.Push
             ? s.AtLevel ? $"Next clear target - new maps around {s.Target:F2} {AxisLong(path)}"
             : $"Next clear target - {s.Target:F2} {AxisLong(path)}"
             : state == null ? $"Next accuracy target - {s.Target - s.Current:+0.00%} average accuracy"
             : $"Next accuracy target - {Math.Min(1, state.Accuracy + s.Target - s.Current):P2} ({s.Target - s.Current:+0.00%})"));
 
-    /// <summary>Explore row (D-060): "Reach this acc" on Improve, "Clear this map" on Never played, toward the expected accuracy.</summary>
+    /// <summary>
+    /// Small line under <see cref="Steps"/> (user, 2026-11-22: the targets read like one map's): a clear target is the
+    /// typical (pp-weighted median) rating and an accuracy target the pp-weighted average of the style's top plays
+    /// (<see cref="PathState.TopK"/>). "New maps around …" is about style pp, so it needs no note.
+    /// </summary>
+    public static string StepsNote(string path, PathState? state, IReadOnlyList<ShortTermStep> steps)
+    {
+        if (state == null) return "";
+        var shown = Shown(path, steps).ToList();
+        var parts = new List<string>();
+        if (shown.Any(s => s.Kind == ObjectiveKind.Push && !s.AtLevel)) parts.Add($"typical {AxisLong(path)}");
+        if (shown.Any(s => s.Kind == ObjectiveKind.Polish)) parts.Add(parts.Count == 0 ? "Average accuracy" : "average accuracy");
+        if (parts.Count > 0 && parts[0].StartsWith("typical", StringComparison.Ordinal)) parts[0] = "T" + parts[0].Substring(1);
+        return parts.Count == 0 ? ""
+            : $"{string.Join(" and ", parts)} of your top {Math.Min(PathState.TopK, state.PathPlayCount)} {PathNames.Display(path)} plays";
+    }
+
+    private static IEnumerable<ShortTermStep> Shown(string path, IReadOnlyList<ShortTermStep> steps) =>
+        steps.Where(s => !(AccSaberTracks.IsTrack(path) && s.Kind == ObjectiveKind.Push));
+
+    /// <summary>
+    /// Explore row (D-060): "Reach this acc" on Improve, "Clear this map" on Never played, toward the expected accuracy.
+    /// AccSaber tracks: always "Reach this acc" (D-061, user: clearing doesn't matter there).
+    /// </summary>
     public static MapRow ExploreRow(string path, ExploreMode mode, ExploreItem i, bool downloaded, MapContext m)
     {
-        var line = Goal(mode == ExploreMode.Improve ? "Reach this acc" : "Clear this map", i.CurrentAccuracy ?? 0, i.ExpectedAccuracy, m);
+        var clear = mode != ExploreMode.Improve && !AccSaberTracks.IsTrack(path);
+        var line = Goal(clear ? "Clear this map" : "Reach this acc", i.CurrentAccuracy ?? 0, i.ExpectedAccuracy, m);
         // The style's rating is already in the card's rating pills (user, 2026-11-22: no duplicates).
         var notes = $"Expected {i.ExpectedAccuracy:P2}" + (i.CurrentAccuracy is double c ? $"   best {c:P2}" : "");
         return new MapRow(i.Map, i.Name, RowTitle(i.Mapper, i.Name), line, m.Live?.CoverUrl ?? "", downloaded ? "Play" : "Get & Play",
@@ -172,14 +209,19 @@ internal static class Format
         return $"{record.Accuracy:P2} - expected {item.ExpectedAccuracy:P1}{vsBest}";
     }
 
-    /// <summary>Next up row (D-060): "Clear this map" for push objectives, "Reach this acc" for accuracy ones.</summary>
+    /// <summary>
+    /// Next up row (D-060): "Clear this map" for push objectives, "Reach this acc" for accuracy ones. AccSaber tracks:
+    /// always "Reach this acc"; their new maps are a "New map" objective (D-061, user: clearing doesn't matter there).
+    /// </summary>
     public static MapRow Row(string path, NextUpItem n, bool downloaded, MapContext m)
     {
         var r = n.Recommendation;
-        var line = Goal(n.Kind == ObjectiveKind.Push ? "Clear this map" : "Reach this acc", r.CurrentAccuracy ?? 0, n.TargetAccuracy, m);
+        var track = AccSaberTracks.IsTrack(path);
+        var clear = n.Kind == ObjectiveKind.Push && !track;
+        var line = Goal(clear ? "Clear this map" : "Reach this acc", r.CurrentAccuracy ?? 0, n.TargetAccuracy, m);
         var misses = n.Demoted ? "   moved down" : n.RecentMisses > 0 ? $"   {n.RecentMisses} miss" + (n.RecentMisses > 1 ? "es" : "") : "";
         // The style's rating is already in the card's rating pills (user, 2026-11-22: no duplicates).
-        var notes = $"{(n.Kind == ObjectiveKind.Push ? "Clear" : "Accuracy")} objective{misses}";
+        var notes = $"{(clear ? "Clear" : n.Kind == ObjectiveKind.Push ? "New map" : "Accuracy")} objective{misses}";
         return new MapRow(r.Map, r.Name, RowTitle(r.Mapper, r.Name), line, m.Live?.CoverUrl ?? "", downloaded ? "Play" : "Get & Play",
             Card(r.Map, r.Mapper, r.Name, r.Stars, r.Nps, r.Njs, r.CurrentAccuracy ?? 0, n.TargetAccuracy, notes, m));
     }

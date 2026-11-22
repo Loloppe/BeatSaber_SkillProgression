@@ -75,6 +75,15 @@ Docs/spec: `https://scoresaber.com/api/openapi.json` (API v2). v1 still live (14
 - `GET /api/leaderboard/by-hash/{HASH}/info?difficulty={1|3|5|7|9}&gameMode=Solo{Characteristic}` → ranked, stars,
   maxPP, coverImage; 404 when the difficulty doesn't exist (D-060).
 - Hash UPPERCASE. Rate limit 400/min (also 25/s, 100/10 s). No star/reweight history per map.
+- **Verified 2026-11-22:** `GET /api/players?page=N` — global ranking, 50/page, `metadata.total` (37,096 ranked
+  players), each {id, name, pp, rank, scoreStats{rankedPlayCount, averageRankedAccuracy}}; rank 1,000 = 12,174 pp.
+  `GET /api/player/{id}/scores?sort=top&limit=100&page=N` — a player's scores best pp first, {score{pp, weight,
+  baseScore, modifiedScore, modifiers "BE,…", multiplier, timeSet, …}, leaderboard{id, songHash, difficulty{difficulty,
+  gameMode}, maxScore, stars, ranked, …}}; accuracy = baseScore / maxScore. Total pp = Σ pp_i × 0.965^i (exact on the
+  rank-1 player: 22,029.77 over 1,233 ranked scores; `weight` field = 0.965^i).
+  **Modifiers (same player, 1,233 scores, 2026-11-22):** pp = stars × 42.117 × curve(baseScore / maxScore), i.e. the
+  unmodified accuracy: positive modifiers (FS, SF, DA, GN, PM, BE, SA, SC seen) give no pp bonus (pp/base = 1.0000,
+  `positiveModifierCurve` unused by these scores); NF halves pp (pp/base 0.500). NO / NB / SS not seen: unverified.
 
 ## AccSaber (Reloaded) — acc-focused pool
 Base `https://api.accsaber.com/v1`, spec at `/v1/api-docs`. Old `/ranked-maps` → 401 (SongSuggestCore broken).
@@ -88,6 +97,11 @@ Base `https://api.accsaber.com/v1`, spec at `/v1/api-docs`. Old `/ranked-maps` �
   **Verified 2026-11-22** on 4 live scores (exact): curve points from `GET /v1/curves` → "AccSaber Score Curve"
   (POINT_LOOKUP, 57 points {x, y}, `scale` 61, `shift` -18: AP = y × (complexity − shift) × scale); complexity from
   `/v1/maps/difficulties/all` (difficulty codes EASY … EXPERT_PLUS).
+  **Weights verified 2026-11-22** (exact on 2 players: true_acc rank 1, 132 scores; tech_acc rank 41, 121 scores):
+  category AP = Σ AP_i × w(i), scores by AP descending, i from 0; `/v1/categories` weightCurve LOGISTIC_SIGMOID
+  k 0.4, y1 0.1, x1 15: S(i) = 1 / (1 + a·e^(k(i − x1))), w(i) = S(i) / S(0), a = (1 − y1) / (y1 − e^(−k·x1)) so that
+  w(0) = 1 and w(x1) = y1. Each score also has `weightedAp`. Category leaderboards: `GET /v1/leaderboards/{code}`
+  (paged; `ap`, `ranking`, `rankedPlays`; true_acc had 18,621 players).
 - Backend reports channel "BETA" (v0.3.6) — expect churn.
 
 ## Cross-platform map identity

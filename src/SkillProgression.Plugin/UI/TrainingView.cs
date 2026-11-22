@@ -43,14 +43,24 @@ internal class TrainingView : ReactiveComponent
         [Destinations.Extreme] = new("Extreme", null),
     };
 
+    /// <summary>With the AccSaber pool the style buttons become AccSaber's three categories (D-061).</summary>
+    internal static readonly Dictionary<string, BsSegmentedControlItem> TrackItems = new()
+    {
+        [AccSaberTracks.TrueAcc] = new("True Acc", null),
+        [AccSaberTracks.StandardAcc] = new("Standard Acc", null),
+        [AccSaberTracks.TechAcc] = new("Tech Acc", null),
+    };
+
     public State<TrainingScreen> Screen { get; } = new(TrainingScreen.Loading);
     public State<string> Message { get; } = new("Loading");
     public State<bool> Importing { get; } = new(false);
     public State<float> ImportProgress { get; } = new(0f);
     public State<string> Focus { get; } = new(Destinations.Midspeed);
+    /// <summary>Focused AccSaber track (D-061): its own state, the track buttons can't hold a style.</summary>
+    public State<string> TrackFocus { get; } = new(AccSaberTracks.TrueAcc);
     public State<MapPool> Pool { get; } = new(MapPool.AnyRanked);
 
-    /// <summary>Map pool choice (D-041), "Any ranked" first (the default). AccSaber applies to the Accuracy style only.</summary>
+    /// <summary>Map pool choice (D-041), "Any ranked" first (the default). AccSaber switches to its tracks (D-061).</summary>
     internal static readonly Dictionary<MapPool, BsDropdownItem> PoolItems = new()
     {
         [MapPool.AnyRanked] = new("Any ranked", null),
@@ -62,14 +72,14 @@ internal class TrainingView : ReactiveComponent
     public State<bool> HasProgress { get; } = new(false);
     public State<float> Progress { get; } = new(0f);
     public State<string> Steps { get; } = new("");
+    /// <summary>What the step targets are measured on, under them (user, 2026-11-22).</summary>
+    public State<string> StepsNote { get; } = new("");
     public State<IReadOnlyList<MapRow>> NextUp { get; } = new(Array.Empty<MapRow>());
     public State<string> Status { get; } = new("");
     public State<bool> Busy { get; } = new(false);
     /// <summary>Spinner next to the status line (map download, sync).</summary>
     public State<bool> Working { get; } = new(false);
     public State<string> ConfirmText { get; } = new("");
-    /// <summary>Fresh-start calibration running (D-040): shows "Skip calibration".</summary>
-    public State<bool> Calibrating { get; } = new(false);
 
     public Action<bool>? OnChooseStart { get; set; }           // true = import from BeatLeader, false = fresh
     public Action<string>? OnFocusChanged { get; set; }
@@ -82,7 +92,6 @@ internal class TrainingView : ReactiveComponent
     public Action<bool>? OnConfirmStartChange { get; set; }     // true = confirmed
     public Action? OnOpenExplore { get; set; }
     public Action? OnOpenAchievements { get; set; }
-    public Action? OnSkipCalibration { get; set; }
 
     protected override GameObject Construct()
     {
@@ -115,13 +124,13 @@ internal class TrainingView : ReactiveComponent
                     Children =
                     {
                         new Label { Text = "How do you want to start?", FontSize = 5.5f, FontStyle = FontStyles.Bold },
-                        new Label { Text = "Import your BeatLeader scores, or start fresh (for example after a long break).", FontSize = 3.4f, Color = Dim },
+                        new Label { Text = "Import your scores (BeatLeader, ScoreSaber, AccSaber), or start fresh (for example after a long break).", FontSize = 3.4f, Color = Dim },
                         new Layout
                         {
                             FlexController = { Gap = 3.pt },
                             Children =
                             {
-                                new BsPrimaryTextButton { Text = "Import from BeatLeader", FlexItem = { Size = new() { x = 42.pt, y = 7.pt } }, OnClick = () => OnChooseStart?.Invoke(true) },
+                                new BsPrimaryTextButton { Text = "Import my scores", FlexItem = { Size = new() { x = 42.pt, y = 7.pt } }, OnClick = () => OnChooseStart?.Invoke(true) },
                                 new BsTextButton { Text = "Start fresh", FlexItem = { Size = new() { x = 30.pt, y = 7.pt } }, OnClick = () => OnChooseStart?.Invoke(false) },
                             }
                         },
@@ -166,11 +175,18 @@ internal class TrainingView : ReactiveComponent
                             {
                                 new BsSegmentedControl<string>
                                 {
+                                    sEnabled = Pool.Map(p => p != MapPool.AccSaber),
                                     FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
                                     Items = FocusItems,
                                     sKey = Focus,
-                                    // AccSaber ranks accuracy maps only: the style is locked to Accuracy (user, 2026-11-11).
-                                    sInteractable = Pool.Map(p => p != MapPool.AccSaber),
+                                    OnKeyChanged = k => OnFocusChanged?.Invoke(k),
+                                },
+                                new BsSegmentedControl<string>
+                                {
+                                    sEnabled = Pool.Map(p => p == MapPool.AccSaber),
+                                    FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
+                                    Items = TrackItems,
+                                    sKey = TrackFocus,
                                     OnKeyChanged = k => OnFocusChanged?.Invoke(k),
                                 },
                                 new BsDropdown<MapPool>
@@ -194,7 +210,16 @@ internal class TrainingView : ReactiveComponent
                                 new Label { sText = Progress.Map(p => $"{p:P0}"), FontSize = 3f, Color = Dim },
                             }
                         },
-                        new Label { sText = Steps, FontSize = 3.3f, Color = Accent, Alignment = TextAlignmentOptions.Center },
+                        new Layout
+                        {
+                            FlexController = { FlexDirection = FlexDirection.Column, AlignItems = Align.Center },
+                            Children =
+                            {
+                                new Label { sText = Steps, FontSize = 3.3f, Color = Accent, Alignment = TextAlignmentOptions.Center },
+                                new Label { sText = StepsNote, FontSize = 2.6f, Color = Dim, Alignment = TextAlignmentOptions.Center,
+                                            sEnabled = StepsNote.Map(n => n.Length > 0) },
+                            }
+                        },
                         new Repeater<MapRow, Layout>
                         {
                             FlexController = { FlexDirection = FlexDirection.Column, AlignItems = Align.Center, Gap = 0.6f.pt },
@@ -231,8 +256,6 @@ internal class TrainingView : ReactiveComponent
                             FlexController = { Gap = 3.pt },
                             Children =
                             {
-                                new BsTextButton { Text = "Skip calibration", FlexItem = { Size = new() { x = 30.pt, y = 5.pt } }, sEnabled = Calibrating,
-                                                   sInteractable = Busy.Map(b => !b), OnClick = () => OnSkipCalibration?.Invoke() },
                                 new BsTextButton { Text = "Start mode", FlexItem = { Size = new() { x = 22.pt, y = 5.pt } },
                                                    sInteractable = Busy.Map(b => !b), OnClick = () => OnRequestStartChange?.Invoke() },
                                 new BsTextButton { Text = "Explore", FlexItem = { Size = new() { x = 22.pt, y = 5.pt } },

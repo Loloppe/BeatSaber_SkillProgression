@@ -12,6 +12,8 @@ namespace SkillProgression.Core.Plays
         LocalPlayLog,
         /// <summary>A clear made from the game's Solo menu, kept as a score only until BeatLeader syncs it (D-049).</summary>
         LocalSolo,
+        /// <summary>A score fetched from ScoreSaber (D-062): evidence for the ScoreSaber-measured styles only.</summary>
+        ScoreSaber,
     }
 
     /// <summary>One cleared play used as evidence of skill, whatever its source.</summary>

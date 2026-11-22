@@ -45,6 +45,22 @@ public class AchievementEngineTests
     }
 
     [Fact]
+    public void Accsaber_tracks_first_computed_on_an_older_progress_file_are_quiet_then_new()
+    {
+        var unlocked = new HashSet<string>(Detect(null, Snap(3)).Select(a => a.Id));
+        var withTrack = Snap(3);
+        withTrack.Paths["True Acc"] = new PathSnapshot { Milestone = 4, Progress = 0.2 };
+        var first = Detect(Snap(3), withTrack, unlocked);
+        Assert.Equal(3, first.Count(a => a.Id.StartsWith("milestone|True Acc|")));
+        Assert.All(first, a => Assert.True(a.Retroactive));
+
+        foreach (var a in first) unlocked.Add(a.Id);
+        var next = Snap(3);
+        next.Paths["True Acc"] = new PathSnapshot { Milestone = 5 };
+        Assert.False(Assert.Single(Detect(withTrack, next, unlocked)).Retroactive);
+    }
+
+    [Fact]
     public void Records_are_style_free_one_point_tiers_of_each_rating()
     {
         var found = Detect(null, Snap(1, stars: 9.7));

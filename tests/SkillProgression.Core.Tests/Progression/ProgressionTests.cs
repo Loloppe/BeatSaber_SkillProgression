@@ -154,7 +154,7 @@ public class ProgressionTests
         Assert.Equal(-0.05, progress.State.AccuracyResidual, 9);
         var target = progress.Objectives.Single(o => o.Kind == ObjectiveKind.Push).Maps.Single(r => r.Map.Hash == fresh.Hash).TargetAccuracy;
         var step = Math.Max(0, progress.Next!.AccuracyResidual - progress.State.AccuracyResidual) / TrainingPlanner.StepsPerWaypointGap;
-        Assert.Equal(AccuracyEstimator.Fit("Speed", best, Rules).Expected(fresh.Ratings[""], "Speed") + step, target, 9);
+        Assert.Equal(AccuracyEstimator.Fit("Speed", best, Rules).Expected(fresh, fresh.Ratings[""], "Speed") + step, target, 9);
         Assert.True(target < 0.95 - 0.05, "below predicted + the top plays' residual");
         Assert.True(target > 0.95 - 0.09, "above predicted + the other plays' residual");
     }

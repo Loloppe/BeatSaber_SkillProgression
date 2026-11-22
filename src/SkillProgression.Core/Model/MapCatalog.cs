@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using SkillProgression.Core.Maps;
 using SkillProgression.Core.Plays;
+using SkillProgression.Core.Profiles;
 
 namespace SkillProgression.Core.Model
 {
@@ -12,12 +13,23 @@ namespace SkillProgression.Core.Model
         public MapRatings Ratings { get; }
         public double Pp { get; }
 
-        public RatedPlay(PlayEvidence evidence, MapEntry map, MapRatings ratings, double pp)
+        /// <summary>
+        /// AccSaber AP at the play's raw accuracy (D-061 tracks); 0 when the map isn't AccSaber-ranked, the model has no
+        /// AccSaber curve, or the play uses a modifier AccSaber bans (<see cref="AccSaberTracks.Counts"/>).
+        /// </summary>
+        public double Ap { get; }
+
+        /// <summary>ScoreSaber pp (D-062 styles); 0 when the map isn't ScoreSaber-ranked or the model has no SS formula.</summary>
+        public double SsPp { get; }
+
+        public RatedPlay(PlayEvidence evidence, MapEntry map, MapRatings ratings, double pp, double ap = 0, double ssPp = 0)
         {
             Evidence = evidence;
             Map = map;
             Ratings = ratings;
             Pp = pp;
+            Ap = ap;
+            SsPp = ssPp;
         }
 
         public double Accuracy => Evidence.Accuracy;
@@ -28,9 +40,13 @@ namespace SkillProgression.Core.Model
     public sealed class MapCatalog
     {
         private readonly Dictionary<MapKey, MapEntry> _maps = new Dictionary<MapKey, MapEntry>();
+        private readonly AccSaberModel? _accSaber;
+        private readonly ScoreSaberModel? _scoreSaber;
 
-        public MapCatalog(IEnumerable<MapEntry> maps)
+        public MapCatalog(IEnumerable<MapEntry> maps, AccSaberModel? accSaber = null, ScoreSaberModel? scoreSaber = null)
         {
+            _accSaber = accSaber;
+            _scoreSaber = scoreSaber;
             foreach (var m in maps)
                 _maps[new MapKey(m.Hash, m.Characteristic, m.Difficulty)] = m;
         }
@@ -69,7 +85,11 @@ namespace SkillProgression.Core.Model
             }
 
             var pp = map.PpCurves.TryGetValue(mod, out var curve) ? curve.Evaluate(play.Accuracy) : 0;
-            return new RatedPlay(play, map, ratings, pp);
+            var ap = _accSaber != null && map.RankedAccSaber && map.AccSaberComplexity > 0 && AccSaberTracks.Counts(play)
+                ? _accSaber.Ap(map.AccSaberComplexity, play.Accuracy) : 0;
+            var ssPp = _scoreSaber != null && map.RankedScoreSaber && map.ScoreSaberStars > 0
+                ? _scoreSaber.Pp(map.ScoreSaberStars, play.Accuracy, play.Modifiers) : 0;
+            return new RatedPlay(play, map, ratings, pp, ap, ssPp);
         }
     }
 }

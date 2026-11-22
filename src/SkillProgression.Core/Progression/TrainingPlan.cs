@@ -73,8 +73,6 @@ namespace SkillProgression.Core.Progression
         public const int StepsPerWaypointGap = 4;
         public const double MinPushStep = 0.1;
         public const double MinPolishStep = 0.002;
-        /// <summary>A polish target never asks for more than this accuracy gain on one map in one step.</summary>
-        public const double MaxPolishGainPerStep = 0.005;
         public const int MissesBeforeDemotion = 3;
         public const int DefaultNextUpCount = 5;
 
@@ -101,15 +99,17 @@ namespace SkillProgression.Core.Progression
 
         /// <summary>
         /// Next up for the focus path: maps from its objectives in priority order, interleaved, without skipped maps;
-        /// maps with 3+ recent misses move to the end (D-030). Short-term targets are used (D-029).
+        /// maps with 3+ recent misses move to the end (D-030). Every map aims at its full target — improve rows too
+        /// (user, 2026-11-22: the old +0.5% per-map step made them far easier than new maps' targets); the short-term
+        /// steps stay on the header's step line (D-029).
         /// </summary>
         public static List<NextUpItem> NextUp(PathProgress? progress, IReadOnlyCollection<PlayRecord> playLog,
-            ISet<MapKey> skipped, int count = DefaultNextUpCount, int stepsPerGap = StepsPerWaypointGap) =>
-            NextUpFromObjectives(progress?.Objectives ?? new List<Objective>(), playLog, skipped, count, stepsPerGap);
+            ISet<MapKey> skipped, int count = DefaultNextUpCount) =>
+            NextUpFromObjectives(progress?.Objectives ?? new List<Objective>(), playLog, skipped, count);
 
         /// <summary>Same as above for any objectives (e.g. a starter objective when there is no path progress yet).</summary>
         public static List<NextUpItem> NextUpFromObjectives(IReadOnlyList<Objective> objectives, IReadOnlyCollection<PlayRecord> playLog,
-            ISet<MapKey> skipped, int count = DefaultNextUpCount, int stepsPerGap = StepsPerWaypointGap)
+            ISet<MapKey> skipped, int count = DefaultNextUpCount)
         {
             var result = new List<NextUpItem>();
             if (objectives.Count == 0) return result;
@@ -125,7 +125,7 @@ namespace SkillProgression.Core.Progression
                     var rec = queues[i].Dequeue();
                     if (skipped.Contains(rec.Map) || !seen.Add(rec.Map)) continue;
                     var objective = objectives[i];
-                    var target = ShortTermAccuracy(objective, rec, stepsPerGap);
+                    var target = rec.TargetAccuracy;
                     candidates.Add(new NextUpItem
                     {
                         Recommendation = rec, Kind = objective.Kind, TargetAccuracy = target,
@@ -138,15 +138,6 @@ namespace SkillProgression.Core.Progression
             result.AddRange(candidates.Where(c => !c.Demoted));
             result.AddRange(candidates.Where(c => c.Demoted));
             return result.Take(count).ToList();
-        }
-
-        /// <summary>Push: map's predicted acc + the next short-term step's residual. Polish: a small gain on the PB.</summary>
-        /// <param name="stepsPerGap">Adaptive steps (D-042): the per-map gain cap scales with the step size.</param>
-        public static double ShortTermAccuracy(Objective objective, MapRecommendation rec, int stepsPerGap = StepsPerWaypointGap)
-        {
-            if (objective.Kind == ObjectiveKind.Polish && rec.CurrentAccuracy is double current)
-                return Math.Min(rec.TargetAccuracy, current + MaxPolishGainPerStep * StepsPerWaypointGap / Math.Max(1, stepsPerGap));
-            return rec.TargetAccuracy;
         }
 
         /// <summary>Unsuccessful attempts (fail or clear below target) on a map since its last successful attempt.</summary>

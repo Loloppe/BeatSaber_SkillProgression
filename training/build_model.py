@@ -1,7 +1,7 @@
 """Assemble model.json (docs/ARCHITECTURE.md, D-026) in the exact shape of SkillProgression.Core.Model.ModelFile.
 
 Inputs (all local, data/explore/*): leaning (06), waypoints + path snapshots (04), pools (05), cached clears (02),
-pool ratings (08), curated (09), peer scores (12, D-058), population DB (D-015).
+pool ratings (08), curated (09), peer scores (12, D-058), AccSaber (13, D-061), ScoreSaber (14, D-062), population DB (D-015).
 Output: data/model/model.json(.gz). Aggregates only — no per-player records (D-007).
 Run from training/:  .venv/Scripts/python build_model.py
 """
@@ -19,7 +19,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "explore"))
 import importlib  # noqa: E402
 
 from common import OUT_ROOT, POPULATION_DB, connect, load_leaderboards, load_players, load_scores, out_dir  # noqa: E402
+import accsaber_tracks  # noqa: E402
 import peer_targets  # noqa: E402
+import scoresaber_styles  # noqa: E402
 from profiles import DESTINATIONS, THRESHOLDS, apply_modifier_ratings, destination, path_plays, speed_mod  # noqa: E402
 
 OUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "model"))
@@ -254,11 +256,17 @@ def main():
     curated = curated_maps(maps)
     print(f"curated: {sum(1 for m in maps if m.get('Curated'))} model maps flagged, {len(curated)} unranked maps added")
     maps += curated
+    model_paths = paths(snaps, wps)
+    accuracy_prior = next((p["PushPrior"] for p in model_paths if p["Destination"] == "Accuracy"), 0.5)
+    track_paths, accsaber = accsaber_tracks.build(maps, accuracy_prior)
+    ss_paths, scoresaber = scoresaber_styles.build(maps, list(model_paths))  # BL styles only: tracks aren't added yet
+    model_paths += track_paths + ss_paths
     peers = peer_targets.build(con, maps, report_players())
 
     model = {"Version": 1, "GeneratedAt": datetime.now(timezone.utc).isoformat(),
              "SourceDb": os.path.basename(POPULATION_DB), "Thresholds": thresholds(), "Leaning": leaning(),
-             "Paths": paths(snaps, wps), "PeerTargets": peers, "Maps": maps}
+             "Paths": model_paths, "PeerTargets": peers, "AccSaber": accsaber,
+             "ScoreSaber": scoresaber, "Maps": maps}
     os.makedirs(OUT_DIR, exist_ok=True)
     text = json.dumps(model, separators=(",", ":"))
     open(os.path.join(OUT_DIR, "model.json"), "w", encoding="utf-8").write(text)

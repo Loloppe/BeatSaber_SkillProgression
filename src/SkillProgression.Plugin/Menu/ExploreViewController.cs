@@ -52,7 +52,13 @@ internal class ExploreViewController : ViewController
                 {
                     _curated = pool == MapPool.Curated;
                     if (!_curated) _service.SetMapPool(pool);
-                    if (pool == MapPool.AccSaber) _view!.Style.Value = Destinations.Accuracy;
+                    // AccSaber swaps the styles for its tracks and back (D-061); ScoreSaber measures the same style there (D-062).
+                    var current = _view!.Style.Value;
+                    _view.Select(pool == MapPool.AccSaber
+                        ? AccSaberTracks.IsTrack(current) ? current : DefaultStyle(pool)
+                        : AccSaberTracks.IsTrack(current) ? DefaultStyle(pool)
+                        : pool == MapPool.ScoreSaber ? ScoreSaberStyles.Id(ScoreSaberStyles.Style(current))
+                        : ScoreSaberStyles.Style(current));
                     _ = LoadAsync();
                 },
             };
@@ -62,12 +68,20 @@ internal class ExploreViewController : ViewController
 
         if (addedToHierarchy && _view != null)
         {
-            var focus = _service.State.FocusPath;
             _view.Pool.Value = _curated ? MapPool.Curated : _service.State.MapPool;
-            _view.Style.Value = _view.Pool.Value == MapPool.AccSaber ? Destinations.Accuracy
-                : string.IsNullOrEmpty(focus) ? Destinations.Midspeed : focus;
+            _view.Select(DefaultStyle(_view.Pool.Value));
             _ = LoadAsync();
         }
+    }
+
+    /// <summary>Training's focus for the pool: its AccSaber track with AccSaber (D-061), else its style.</summary>
+    private string DefaultStyle(MapPool pool)
+    {
+        if (pool == MapPool.AccSaber)
+            return AccSaberTracks.IsTrack(_service.State.AccSaberFocus) ? _service.State.AccSaberFocus : AccSaberTracks.TrueAcc;
+        var focus = _service.State.FocusPath;
+        var style = string.IsNullOrEmpty(focus) ? Destinations.Midspeed : focus;
+        return pool == MapPool.ScoreSaber ? ScoreSaberStyles.Id(style) : style;
     }
 
     private void NewList()

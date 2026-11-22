@@ -34,8 +34,8 @@ namespace SkillProgression.Core.Progression
         {
             _model = model ?? throw new ArgumentNullException(nameof(model));
             // Progression only sees ranked maps; curated-only maps are for Explore (D-045).
-            _catalog = new MapCatalog(model.Maps.Where(MapPools.IsRanked));
-            ExploreCatalog = new MapCatalog(model.Maps);
+            _catalog = new MapCatalog(model.Maps.Where(MapPools.IsRanked), model.AccSaber, model.ScoreSaber);
+            ExploreCatalog = new MapCatalog(model.Maps, model.AccSaber, model.ScoreSaber);
         }
 
         public MapCatalog Catalog => _catalog;

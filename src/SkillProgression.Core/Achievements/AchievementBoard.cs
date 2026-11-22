@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SkillProgression.Core.Profiles;
 
 namespace SkillProgression.Core.Achievements
 {
@@ -86,7 +87,7 @@ namespace SkillProgression.Core.Achievements
                 case AchievementCategory.Milestones:
                     if (milestoneCounts.TryGetValue(style, out var count))
                         for (var m = 2; m <= count; m++)
-                            list.Add(Entry($"milestone|{style}|{m}", $"{style} milestone {m}",
+                            list.Add(Entry($"milestone|{style}|{m}", $"{PathNames.Display(style)} milestone {m}",
                                 path != null && m == path.Milestone + 1 ? path.Progress : (double?)null));
                     return list;
 

@@ -39,6 +39,14 @@ namespace SkillProgression.Core.Profiles
             return r.Pass <= t.MidPass ? Destinations.Midspeed : Destinations.Speed;
         }
 
+        /// <summary>
+        /// The style mix as ScoreSaber sees it (D-062, "YOUR STYLE" with the ScoreSaber pool): plays weighted by SS pp at
+        /// the maps' no-modifier ratings, only plays worth SS pp.
+        /// </summary>
+        public static StyleMix ComputeScoreSaber(IEnumerable<RatedPlay> plays, DestinationThresholds t, int topN = ProfileBuilder.DefaultTopN) =>
+            Compute(plays.Where(p => p.SsPp > 0).Select(p => new RatedPlay(p.Evidence, p.Map,
+                p.Map.Ratings.TryGetValue("", out var nomod) ? nomod : p.Ratings, p.SsPp)), t, topN);
+
         public static StyleMix Compute(IEnumerable<RatedPlay> plays, DestinationThresholds t, int topN = ProfileBuilder.DefaultTopN)
         {
             var best = ProfileBuilder.BestPerMap(plays);

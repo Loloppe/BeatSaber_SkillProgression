@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SkillProgression.Core.Model
 {
@@ -17,7 +18,82 @@ namespace SkillProgression.Core.Model
         public List<PathModel> Paths { get; set; } = new List<PathModel>();
         /// <summary>Peer-based accuracy targets (D-058); null in models built before it.</summary>
         public PeerTargetsModel? PeerTargets { get; set; }
+        /// <summary>AccSaber score curve and weights (D-061 tracks); null in models built before it.</summary>
+        public AccSaberModel? AccSaber { get; set; }
+        /// <summary>ScoreSaber pp curve and modifier values (D-062 styles); null in models built before it.</summary>
+        public ScoreSaberModel? ScoreSaber { get; set; }
         public List<MapEntry> Maps { get; set; } = new List<MapEntry>();
+    }
+
+    /// <summary>
+    /// ScoreSaber's pp formula at model build time (verified on live scores, D-060 / D-062): pp = stars × Factor ×
+    /// curve(unmodified accuracy) × (1 + Σ negative modifier values); positive modifiers add nothing (the ranked realm's
+    /// `positiveModifiers` is false). A player's total = Σ pp_i × Decay^i.
+    /// </summary>
+    public sealed class ScoreSaberModel
+    {
+        /// <summary>pp curve points: Acc = accuracy, Pp = multiplier (1.0 at 95%).</summary>
+        public PpCurve Curve { get; set; } = new PpCurve();
+        public double Factor { get; set; } = 42.117;
+        public double Decay { get; set; } = 0.965;
+        /// <summary>Ranked realm modifier values ("NF" → -0.5 …); only negative ones apply.</summary>
+        public Dictionary<string, double> ModifierValues { get; set; } = new Dictionary<string, double>();
+
+        public double Pp(double stars, double accuracy, IEnumerable<string> modifiers)
+        {
+            var multiplier = 1.0;
+            foreach (var m in modifiers)
+                if (ModifierValues.TryGetValue(m.Trim().ToUpperInvariant(), out var v) && v < 0) multiplier += v;
+            return stars * Factor * Curve.Evaluate(accuracy) * Math.Max(0, multiplier);
+        }
+    }
+
+    /// <summary>
+    /// AccSaber's AP formulas at model build time (`/v1/curves`, `/v1/categories`; verified on live scores, D-060 / D-061):
+    /// AP = curve(acc) × (complexity − shift) × scale; a category's AP = Σ AP_i × w(i) over scores by AP descending.
+    /// </summary>
+    public sealed class AccSaberModel
+    {
+        /// <summary>AccSaber Score Curve points: x = accuracy, y = multiplier.</summary>
+        public PpCurve Curve { get; set; } = new PpCurve();
+        public double Scale { get; set; } = 61;
+        public double Shift { get; set; } = -18;
+        /// <summary>Weight curve LOGISTIC_SIGMOID parameters: w(0) = 1, w(X1) = Y1, steepness K.</summary>
+        public double WeightK { get; set; } = 0.4;
+        public double WeightY1 { get; set; } = 0.1;
+        public double WeightX1 { get; set; } = 15;
+
+        public double Ap(double complexity, double accuracy) => Curve.Evaluate(accuracy) * (complexity - Shift) * Scale;
+
+        /// <summary>Weight of the score at <paramref name="index"/> (0 = best): S(i) / S(0), S(i) = 1 / (1 + a·e^(K(i − X1))).</summary>
+        public double Weight(int index)
+        {
+            var a = (1 - WeightY1) / (WeightY1 - Math.Exp(-WeightK * WeightX1));
+            double S(double i) => 1 / (1 + a * Math.Exp(WeightK * (i - WeightX1)));
+            return S(index) / S(0);
+        }
+
+        /// <summary>Category AP of scores' AP values (any order): Σ AP_i × w(i), best first.</summary>
+        public double Total(IEnumerable<double> aps)
+        {
+            double total = 0;
+            var i = 0;
+            foreach (var ap in aps.OrderByDescending(x => x)) total += ap * Weight(i++);
+            return total;
+        }
+
+        /// <summary>
+        /// D-061: what one new score of <paramref name="ap"/> adds to the category AP of <paramref name="sortedDesc"/> (the
+        /// player's AP values, best first): its own weighted AP plus the weight every lower score loses by moving down.
+        /// </summary>
+        public double Gain(IReadOnlyList<double> sortedDesc, double ap)
+        {
+            var at = 0;
+            while (at < sortedDesc.Count && sortedDesc[at] >= ap) at++;
+            var gain = ap * Weight(at);
+            for (var i = at; i < sortedDesc.Count; i++) gain += sortedDesc[i] * (Weight(i + 1) - Weight(i));
+            return gain;
+        }
     }
 
     /// <summary>
@@ -106,6 +182,13 @@ namespace SkillProgression.Core.Model
         /// False for polish-dominated paths (Accuracy), where difficulty stays flat.
         /// </summary>
         public bool DifficultyGated { get; set; } = true;
+        /// <summary>
+        /// D-062 (user): a player cannot be placed past a waypoint whose (smoothed) accuracy vs predicted they have not
+        /// (nearly) reached: within a quarter of the step from the previous waypoint. Set on ScoreSaber's ungated styles
+        /// (Accuracy, Midspeed), whose cross-sectional waypoints mix in top players who only dabble in the style, so path
+        /// pp alone placed players far too high.
+        /// </summary>
+        public bool AccuracyGated { get; set; }
         public List<WaypointModel> Waypoints { get; set; } = new List<WaypointModel>();
     }
 
@@ -142,6 +225,12 @@ namespace SkillProgression.Core.Model
         public bool RankedBeatLeader { get; set; }
         public bool RankedScoreSaber { get; set; }
         public bool RankedAccSaber { get; set; }
+        /// <summary>ScoreSaber star rating at model build time (D-062 SS pp); 0 when not ScoreSaber-ranked or before D-062.</summary>
+        public double ScoreSaberStars { get; set; }
+        /// <summary>AccSaber category code (true_acc / standard_acc / tech_acc) when AccSaber-ranked; empty before D-061.</summary>
+        public string AccSaberCategory { get; set; } = "";
+        /// <summary>AccSaber complexity at model build time (D-061 tracks' difficulty axis); 0 when not AccSaber-ranked.</summary>
+        public double AccSaberComplexity { get; set; }
         /// <summary>Curated on BeatSaver (Explore's Curated pool, D-045). Curated maps ranked nowhere have no pp curves.</summary>
         public bool Curated { get; set; }
         /// <summary>BeatSaver vote score (0..1), set for curated maps: orders Explore's Curated "never played" list.</summary>

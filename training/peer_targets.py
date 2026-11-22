@@ -1,7 +1,7 @@
 """Peer-based accuracy targets (D-058): per map, the accuracy of players at each level, by style x difficulty band.
 
 Cells: per style (Destination), the style-wide cell "<Destination>" and 3 difficulty bands "<Destination>|<b>" (equal
-map counts along the style's axis). In each cell a robust additive fit over comparable PBs,
+map counts along the style's axis); AccSaber tracks (D-061) likewise, on their category's maps along complexity. In each cell a robust additive fit over comparable PBs,
 acc[p, m] ~ Ease[m] + level[p] (alternating medians, players with >= MIN_FIT maps in the cell, levels centred on the
 cell's median player), gives every population player a level. Scores count with no modifier or only
 NEUTRAL_MODIFIERS (same rule as Core's PeerTargets.Comparable). Per map, the model stores at LEVEL_QUANTILES of the
@@ -20,6 +20,8 @@ import pandas as pd
 
 from common import out_dir
 from profiles import DESTINATIONS, path_plays
+
+ACCSABER_TRACKS = {"true_acc": "True Acc", "standard_acc": "Standard Acc", "tech_acc": "Tech Acc"}  # Core AccSaberTracks
 
 MIN_FIT = 20          # population player's maps in a cell to be part of its fit
 MIN_BAND = 8          # players behind every stored value
@@ -69,9 +71,14 @@ def cells(maps, played) -> list[tuple[str, str, int, np.ndarray]]:
     """[(cell id, destination, band or -1, map indices)] from the maps' no-modifier ratings."""
     r = pd.DataFrame([{"i": i, "PassRating": m["Ratings"][""]["Pass"], "TechRating": m["Ratings"][""]["Tech"],
                        "Stars": m["Ratings"][""]["Stars"]} for i, m in enumerate(maps) if i in played])
+    r["Complexity"] = [maps[i].get("AccSaberComplexity", 0) for i in r.i]
+    r["Category"] = [maps[i].get("AccSaberCategory", "") for i in r.i]
+    groups = [(path, *path_plays(r, path)) for path in DESTINATIONS]
+    groups += [(track, r[r.Category == code], "Complexity") for code, track in ACCSABER_TRACKS.items()]
     out = []
-    for path in DESTINATIONS:
-        sub, axis = path_plays(r, path)
+    for path, sub, axis in groups:
+        if sub.empty:
+            continue
         out.append((path, path, -1, sub.i.to_numpy()))
         edges = np.quantile(sub[axis], np.linspace(0, 1, BANDS + 1)[1:-1])
         band = np.searchsorted(edges, sub[axis].to_numpy(), side="right")

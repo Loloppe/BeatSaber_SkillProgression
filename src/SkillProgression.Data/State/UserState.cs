@@ -61,6 +61,11 @@ namespace SkillProgression.Data.State
         /// <summary>Paths the player follows (D-008), and the one they focus on now (D-029: switchable any time).</summary>
         public List<string> Paths { get; set; } = new List<string>();
         public string FocusPath { get; set; } = "";
+        /// <summary>
+        /// AccSaber track focused while the pool is AccSaber (D-061), kept apart from <see cref="FocusPath"/> so switching
+        /// pools back restores the style; empty = the track with the most AP.
+        /// </summary>
+        public string AccSaberFocus { get; set; } = "";
         /// <summary>Pool recommendations come from (D-041); "Any ranked" by default (user, 2026-11-10).</summary>
         public MapPool MapPool { get; set; } = MapPool.AnyRanked;
         /// <summary>Skipped recommendations as "HASH/Characteristic/Difficulty" (D-029).</summary>

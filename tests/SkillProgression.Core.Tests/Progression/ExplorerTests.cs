@@ -30,7 +30,7 @@ public class ExplorerTests
         var est = AccuracyEstimator.Fit("Speed", best, Rules);
         Assert.Equal(-0.01, est.Residual(8), 3);
         Assert.Equal(-0.03, est.Residual(10), 3);
-        Assert.Equal(0.95 - 0.03, est.Expected(new MapRatings { Pass = 10, Tech = 4, PredictedAcc = 0.95 }, "Speed"), 3);
+        Assert.Equal(0.95 - 0.03, est.Expected(new MapEntry(), new MapRatings { Pass = 10, Tech = 4, PredictedAcc = 0.95 }, "Speed"), 3);
     }
 
     [Fact]

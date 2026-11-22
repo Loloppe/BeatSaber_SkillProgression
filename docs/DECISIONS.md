@@ -333,7 +333,7 @@ Format: ID — date — decision — rationale. Open questions listed below with
   **easier positions are shares of the level** (-1/-2/-3 = 85% / 70% / 50%; harder stays level + 1..3 steps of
   0.35 × spread), because steps alone only reached ~0.8★ below the level on Accuracy (user's data now: 4.25 → 3.61 /
   2.97 / 2.12★). The window still clamps to where the style has maps (High Tech / Extreme bottom out at -2).
-- **D-048 — 2026-11-11 — AccSaber pool = Accuracy only (user; refines D-041).** Choosing AccSaber (Training or Explore)
+- **D-048 — 2026-11-11 — AccSaber pool = Accuracy only (user; refines D-041; style lock replaced by tracks, D-061).** Choosing AccSaber (Training or Explore)
   focuses the Accuracy style and locks the style buttons (Reactive's `BsSegmentedControl` can only disable the whole
   control, so all five look disabled with Accuracy selected). With AccSaber, every AccSaber map is an Accuracy map for
   **recommendations** (Next up, starters, calibration, Explore) via `PathRules.IsRecommendable` — 4 of ~600 have a pass
@@ -513,11 +513,111 @@ Format: ID — date — decision — rationale. Open questions listed below with
   halved while > 18 m, + offset, ≥ 0.25 beats). **Claude defaults to confirm:** cover art on rows (BeatLeader's
   `coverImage`), card placed under the hovered row, Explore uses the same rows. Card is a Reactive `Overlay`, not a
   modal (modals add a full-screen raycast blocker that would steal the pointer from the row).
+- **D-061 — 2026-11-22 — AccSaber pool: three category tracks True Acc / Standard Acc / Tech Acc (user request; revises
+  D-048).** With the AccSaber pool, the style buttons become True Acc / Standard Acc / Tech Acc (AccSaber's three ranked
+  categories) instead of five buttons locked to Accuracy. **User choices:** (1) option B, **separate tracks** (each its
+  own level, steps, calibration, peer targets, focus and achievements), not filters on the Accuracy style;
+  (2) **AccSaber-native** track definition: a track's maps = its category's AccSaber maps; difficulty axis = AccSaber
+  complexity; play weight = AccSaber AP (curve(acc) × (complexity + 18) × 61) summed with AccSaber's own logistic
+  weights (verified exact on 2 players, API_INTEGRATIONS.md); waypoints built **cross-sectionally** (no history: every
+  BeatLeader score on the category's maps → each population player's category AP today → rank milestones, typical
+  complexity and accuracy per milestone; push/polish prior = Accuracy's, not difficulty-gated); peer targets = D-058's
+  fit per category (3 complexity bands each); (3) scope: Training (focus saved separately in state.json, starting on the
+  category with the most AP; switching pools back restores the previous style), Explore (slider on complexity) and
+  Achievements (milestones / consistency per category, milestone chart). Unchanged: the player header's style mix (five
+  BL styles), the BL Accuracy style with the other pools, how progress is measured on the five styles.
+  **Modifiers (user, 2026-11-22):** AccSaber bans No Obstacles, No Bombs, Slower Song and Small Notes (BL "SC");
+  everything else counts at its raw accuracy, speed modifiers and Pro Mode included (confirmed on live scores: the
+  True Acc #1's counted scores include 24 SF / FS PBs, a rank-1,000 player's two PM scores count). Track AP (Core
+  `AccSaberTracks.Counts`, Python `BANNED_MODIFIERS`) uses that rule; residuals on tracks use the no-modifier predicted
+  accuracy. Track peer targets keep D-058's comparable rule (they are about accuracy at equal difficulty).
+  **Accuracy only (user, 2026-11-22: "clear doesn't really matter for AccSaber, it's all about improving accuracy";
+  option A):** tracks never get a "clear harder maps" objective; their new-maps objective is always the D-051 one (new
+  maps around the player's own complexity, for the AP they add); the progress bar weighs AP and accuracy only
+  (complexity reported, not counted); the step line shows accuracy targets only; every track row (Next up and
+  Explore's Never played) reads "Reach this acc", new maps tagged "New map objective".
+  No Fail scores don't count (AccSaber's `/v1/modifiers` lists NF at x0.5, application unknown; user: leave it so).
+  **Claude assumptions to confirm:** model stores each AccSaber map's category + complexity and the AccSaber
+  curve / weight parameters at build time (offline; live values still shown on map cards, D-060).
+  **New-map ranking on tracks (user, option 2 of 3):** peer popularity on tracks can only be cross-sectional (how many
+  players near the next milestone have played the map — favours well-known maps, flattens near the top), so new maps
+  in Next up and Explore's Never played are ordered by the AP a score at their target accuracy would add to the
+  player's category total with AccSaber's weights (`AccSaberModel.Gain`, `PathRules.TrackGain`); popularity only breaks
+  ties. Rejected: keep popularity as is; approximate history from score dates. Starter maps (< 5 plays) and calibration
+  picks still order by closeness then popularity.
+  **Implementation findings:** BeatLeader scores reproduce a player's AccSaber category AP exactly (rank-1 True Acc
+  10,817 vs 10,816.9 live; a rank-1,000 player 6,688.6 vs 6,689, all 70 of their AccSaber scores found in the BL cache)
+  but BL holds only ~3/4 of AccSaber's players (that player ranks 772 among them), so waypoints are cut at the AP
+  AccSaber shows at each rank milestone (`/v1/leaderboards/{code}`, fetched at build time), not at ranks within the BL
+  population; the Training header says "AccSaber True Acc rank 1,000". Complexity barely moves along a track (True
+  ~3.5–3.8, Standard ~7.7, Tech ~10.3–10.7) while accuracy climbs: tracks are polish paths, as expected. Track AP
+  counts plays without a banned modifier (`RatedPlay.Ap`), like the population side. Limitation: BeatLeader keeps one
+  PB per map (by pp), while AccSaber keeps the best accuracy, so where a higher-pp SF / FS PB replaced a better
+  no-modifier score on BeatLeader (29 of the True Acc #1's maps) AccSaber counts the older score we can't see; the AP
+  still matches (10,816.9) because only the top ~30 scores weigh. That player: 118 counted plays vs AccSaber's 132. Tracks are analysed whatever the pool so
+  their milestones accrue; the first time a progress file sees tracks, their achievements are quiet (no burst of
+  celebrations after the update). With the AccSaber pool and no saved track, Training suggests the track with the most
+  AP and saves it so Explore / Achievements open on it.
+- **D-062 — 2026-11-22 — ScoreSaber pool: the five styles measured on ScoreSaber (user request; built).**
+  Today the ScoreSaber pool only filters recommendations (D-041); levels are BeatLeader's. **User choices:** (1) keep the
+  five style buttons, each style measured ScoreSaber-natively — SS pp, milestones at SS global ranks — with style
+  membership and difficulty axis from BeatLeader's ratings (every SS map has them, D-041); (2) scores = the player's
+  ScoreSaber scores (synced from SS's API, cached) + plugin plays until SS has them; no SS profile → starter maps.
+  Verified facts (API_INTEGRATIONS.md): player scores best-first 100/page; pp = stars × 42.117 × curve(base acc),
+  modifiers give no bonus, NF halves; total = Σ pp_i × 0.965^i (exact on the rank-1 player); global ranking 50/page
+  (37,096 players; rank 1,000 = 12,174 pp). Waypoints cross-sectional like D-061, from ~60 SS players sampled around
+  each rank milestone (their top scores; ~1,000–3,000 calls, minutes).
+  **Defaults confirmed by the user:** (a) separate path ids ("SS Speed" etc., shown as the style name) so SS and BL
+  milestones / achievements don't collide; titles "Speed (ScoreSaber) milestone 3"; (b) the style focus is shared
+  between BL pools and ScoreSaber; (c) styles are rated at no-modifier ratings on SS (SS ignores speed modifiers);
+  NF plays count at half pp like SS; (d) accuracy targets stay D-058's BeatLeader peer targets, map popularity stays
+  BeatLeader's; (e) model gains each SS map's stars + the SS curve at build time; (f) rank ladder 30,000 … 10.
+  **Implementation:** `training/fetch_scoresaber.py` (6,243 ranked leaderboards, curve, pp at milestones, top 300 scores
+  of 1,019 players sampled around them; ~40 min) and `training/scoresaber_styles.py`; Core `ScoreSaberStyles`,
+  `ScoreSaberModel`, `RatedPlay.SsPp`; Data `ScoreSaberClient` / `ScoreSaberScoreCache` (scoresaber-scores.json);
+  the plugin analyses the SS styles on SS scores + plugin / Solo plays (whatever the pool, so milestones accrue) and
+  merges them into the report; CLI `player <id> --source scoresaber`. SS pp modifiers: only negative realm values
+  apply (NF -0.5 verified; NO / NB / SS / NA from the realm's `modifierValues`, unverified on scores).
+  **Claude change to confirm:** waypoints use every sampled player with >= 5 plays of the style, not only players who
+  arrived at it (04's rule): with no history the arrived filter left 4 Accuracy / 1 Extreme players in a quarter of the
+  sample. Result: 10–12 milestones per style, 35–80 players each. Checks: Core's SS pp matches ScoreSaber (a rank-1,000
+  player's Extreme path pp 12,174.7 vs his 12,174.0 total; the #1 21,996 vs 22,030); that player lands at the "rank
+  ~1,000" milestone on Speed, High Tech and Extreme (gated styles). On the ungated styles (Accuracy, Midspeed: placed
+  by path pp only) the same player first reached the rank-50 Accuracy and rank-100 Midspeed milestones (top players who
+  only dabble pull the milestones' path pp down). **Accuracy gating (user, option 1 of 3):** SS Accuracy / Midspeed are
+  `AccuracyGated`: no placement past a milestone whose (non-decreasing) accuracy vs predicted isn't reached within a
+  quarter of the step from the previous milestone (a spread-based tolerance was ~2% on the 78–99% SS sample, too
+  loose); the progress bar is capped by the accuracy share. Now: that player at rank ~1,000 (Accuracy) / ~2,000
+  (Midspeed); the #1 at ~100 / ~25. Rejected: specialists-only milestones (thin at the top); keep as is.
+- **D-063 — 2026-11-22 — User review round: full targets on improve rows, UI follows the ranked system.**
+  (1) **"Skip calibration" removed** (user: skipping could leave no maps to play); old state files' skipped flags are
+  still honoured. (2) **Start mode** covers every platform (it already did: Import = full BL history, which AccSaber's
+  scores are, plus SS scores; Fresh ignores earlier scores on BL, AccSaber and SS) — texts now say so ("Import my
+  scores"). (3) **Improve rows aim at the full target** (user, option A): the +0.5% per-map short-term step (D-029 /
+  D-042, `ShortTermAccuracy`, `MaxPolishGainPerStep`) is gone; a 91.91% PB showed 92.58% while new maps asked 97.73%.
+  The impossible targets the user remembered came from the old residual rule, fixed by D-058, not from that step.
+  The header's step line keeps the short-term steps. **Peer curves stop at their top** (user, option 1 of 3): above
+  the highest stored level the target stays at the curve's last value instead of rising one for one (D-058's known
+  limit for the very top players); below the curve it still moves with the level. Rejected: step + full target on the
+  card; an extra max jump over the current score. (4) **"YOUR STYLE" follows the pool** (user, option A): BL / Any
+  ranked = BL style mix; ScoreSaber = the same five styles' shares weighted by SS pp from SS scores
+  (`StyleMixCalculator.ComputeScoreSaber`, no-modifier ratings); AccSaber = AP and milestone per category track.
+  (5) History's BeatLeader style milestones read "BL Tech milestones" etc. (6) **Achievements: ranked-system dropdown**
+  (BeatLeader / ScoreSaber / AccSaber) next to the style buttons, opening on Training's system (Any ranked → BL); it
+  picks the styles / tracks for milestones, consistency and Almost there; records and platform ranks stay shared.
+  (8) The step targets say what they are measured on (user: they read like one map's target), in a small grey line
+  under the step line to save space (user): "Typical pass rating and average accuracy of your top 15 Midspeed plays"
+  (clear target = pp-weighted median rating, accuracy target = pp-weighted average, PathState.TopK; "new maps
+  around …" needs no note).
+  (7) Fixed: the style buttons overlapped the category dropdown and the Achievements / History tabs (wrapper without a
+  size).
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are
   complexity bands of acc maps; "tech acc" ≈ the hardest acc maps, NOT BL-style tech. Beyond that, maps become
   slow-midspeed.
+- **AccSaber banned modifiers** (user, 2026-11-22): No Obstacles, No Bombs, Slower Song, Small Notes. Pro Mode and
+  speed-up modifiers are allowed (D-061).
 - **BL pass rating** correlates directly with map speed; a good indicator the player can play faster maps.
 - **BL acc rating** derives from the AI predicted accuracy (≈ what a top player reaches) and includes a speed
   factor. It says little on its own. Style specialists can beat predicted acc by up to ~1 point.

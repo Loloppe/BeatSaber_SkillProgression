@@ -8,6 +8,7 @@ using Reactive;
 using SkillProgression.Core.Maps;
 using SkillProgression.Core.Model;
 using SkillProgression.Core.Plays;
+using SkillProgression.Core.Profiles;
 using SkillProgression.Core.Progression;
 using SkillProgression.Data.State;
 using SkillProgression.Plugin.Gameplay;
@@ -66,7 +67,6 @@ internal class TrainingViewController : ViewController
                 OnConfirmStartChange = ConfirmStartChange,
                 OnOpenExplore = () => ExploreRequested?.Invoke(),
                 OnOpenAchievements = () => AchievementsRequested?.Invoke(),
-                OnSkipCalibration = SkipCalibration,
             };
             _view.Use(transform);
             _view.WithRectExpand();
@@ -123,7 +123,7 @@ internal class TrainingViewController : ViewController
         {
             // First import can take a while: full-screen progress (user request).
             _view.Screen.Value = TrainingScreen.Loading;
-            _view.Message.Value = "Importing your BeatLeader scores";
+            _view.Message.Value = "Importing your BeatLeader and ScoreSaber scores";
             _view.ImportProgress.Value = 0f;
             _view.Importing.Value = true;
         }
@@ -152,16 +152,23 @@ internal class TrainingViewController : ViewController
     {
         if (_view == null) return;
         _view.Screen.Value = TrainingScreen.Training;
-        _platforms.ShowStyleMix(Format.StyleMixLines(s.Report));
-        _view.Focus.Value = s.FocusPath;
+        // "YOUR STYLE" follows the ranked system (user, 2026-11-22).
+        _platforms.ShowStyleMix(_service.State.MapPool switch
+        {
+            MapPool.ScoreSaber => Format.StyleMixLines(s.ScoreSaberStyleMix),
+            MapPool.AccSaber => Format.AccSaberTrackLines(s.Report),
+            _ => Format.StyleMixLines(s.Report.StyleMix),
+        });
+        if (AccSaberTracks.IsTrack(s.FocusPath)) _view.TrackFocus.Value = s.FocusPath;
+        else _view.Focus.Value = ScoreSaberStyles.Style(s.FocusPath);
         _view.Pool.Value = _service.State.MapPool;
-        _view.Calibrating.Value = s.Calibration != null;
         if (s.Calibration is { } c)
         {
             _view.Milestone.Value = Format.CalibrationTitle(c);
             _view.HasProgress.Value = true;
             _view.Progress.Value = (float)(c.Step - 1) / c.Total;
             _view.Steps.Value = Format.CalibrationLast(c);
+            _view.StepsNote.Value = "";
         }
         else
         {
@@ -169,10 +176,13 @@ internal class TrainingViewController : ViewController
             _view.HasProgress.Value = s.Focus != null;
             _view.Progress.Value = (float)(s.Focus?.ProgressToNext ?? 0);
             _view.Steps.Value = Format.Steps(s.FocusPath, s.Focus?.State, s.Steps);
+            _view.StepsNote.Value = Format.StepsNote(s.FocusPath, s.Focus?.State, s.Steps);
         }
         _view.NextUp.Value = Rows(s);
         _live.Load(s.NextUp.Select(n => n.Recommendation.Map), () => RefreshRows(keepDownloading: true));
-        if (s.NextUp.Count == 0)
+        if (s.NoScoreSaberScores)
+            _view.Status.Value = "No ScoreSaber scores found - starting from easier maps.";
+        else if (s.NextUp.Count == 0)
             _view.Status.Value = "No maps to recommend for this style right now.";
     }
 
@@ -195,8 +205,8 @@ internal class TrainingViewController : ViewController
         if (_view == null) return;
         _pendingStartMode = _service.State.StartMode == StartMode.Fresh ? StartMode.ImportBeatLeader : StartMode.Fresh;
         _view.ConfirmText.Value = _pendingStartMode == StartMode.Fresh
-            ? "Start fresh from now? Your BeatLeader history will be ignored."
-            : "Import your BeatLeader scores? Your full history will be used again.";
+            ? "Start fresh from now? Your score history (BeatLeader, ScoreSaber, AccSaber) will be ignored."
+            : "Import your scores? Your full history (BeatLeader, ScoreSaber, AccSaber) will be used again.";
         _view.Screen.Value = TrainingScreen.ConfirmStartChange;
     }
 
@@ -217,14 +227,6 @@ internal class TrainingViewController : ViewController
     private async void ChangePool(Core.Model.MapPool pool)
     {
         _service.SetMapPool(pool);
-        try { await RefreshAsync(sync: false); }
-        catch (Exception e) { Plugin.Log.Error(e); }
-    }
-
-    private async void SkipCalibration()
-    {
-        if (_snapshot == null) return;
-        _service.SkipCalibration(_snapshot.FocusPath);
         try { await RefreshAsync(sync: false); }
         catch (Exception e) { Plugin.Log.Error(e); }
     }

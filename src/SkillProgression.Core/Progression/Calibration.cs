@@ -66,7 +66,7 @@ namespace SkillProgression.Core.Progression
         {
             var axes = catalog.Recommendable(path)
                 .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
-                .Select(m => PathRules.Axis(path, m.Ratings[""])).ToList();
+                .Select(m => PathRules.Axis(path, m, m.Ratings[""])).ToList();
             return axes.Count == 0 ? (double?)null : axes.Min();
         }
 
@@ -140,7 +140,7 @@ namespace SkillProgression.Core.Progression
                 .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
                 .Select(m => (map: m, key: new MapKey(m.Hash, m.Characteristic, m.Difficulty), r: m.Ratings[""]))
                 .Where(x => !exclude.Contains(x.key))
-                .Select(x => (x.map, x.key, x.r, axis: PathRules.Axis(path, x.r)))
+                .Select(x => (x.map, x.key, x.r, axis: PathRules.Axis(path, x.map, x.r)))
                 // Closest in steps of 0.1, then the most popular there.
                 .OrderBy(x => Math.Round(Math.Abs(x.axis - level) * 10))
                 .ThenByDescending(x => x.map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0)

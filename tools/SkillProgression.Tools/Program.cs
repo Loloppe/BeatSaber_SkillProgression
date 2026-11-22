@@ -4,9 +4,11 @@ using SkillProgression.Core.Profiles;
 using SkillProgression.Core.Progression;
 using SkillProgression.Data.BeatLeader;
 using SkillProgression.Data.Model;
+using SkillProgression.Data.ScoreSaber;
 
 // SkillProgression.Tools — offline/dev commands (docs/ARCHITECTURE.md).
-//   player <beatleaderId> [--model <path>] [--since yyyy-MM-dd] [--path "<destination>"]
+//   player <beatleaderId> [--model <path>] [--since yyyy-MM-dd] [--path "<destination>"] [--source scoresaber]
+//                                        --source scoresaber: the ScoreSaber-measured styles on ScoreSaber's scores (D-062)
 //   check-anchors [--model <path>]       user anchor players (D-018..D-021) through the live API + Core
 //   check-peers [--model <path>]         D-058: Core's peer levels vs the ones build_model.py fitted (anchor/review players)
 CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
@@ -32,8 +34,11 @@ switch (args[0])
     case "player" when options.Positional.Count == 1:
     {
         var since = options.Get("since") is { } s ? DateTime.SpecifyKind(DateTime.Parse(s), DateTimeKind.Utc) : (DateTime?)null;
-        var scores = await beatLeader.GetAllScoresAsync(options.Positional[0]);
-        var paths = options.Get("path") is { } p ? new[] { p } : null;
+        var scoreSaber = string.Equals(options.Get("source"), "scoresaber", StringComparison.OrdinalIgnoreCase);
+        var scores = scoreSaber
+            ? await new ScoreSaberClient(http).GetScoresAsync(options.Positional[0])
+            : await beatLeader.GetAllScoresAsync(options.Positional[0]);
+        var paths = options.Get("path") is { } p ? new[] { p } : scoreSaber ? ScoreSaberStyles.All : null;
         Report.Print(options.Positional[0], engine.Analyze(scores, paths, since), model);
         return 0;
     }
@@ -165,11 +170,12 @@ internal static class Report
         foreach (var (path, progress) in r.Paths.OrderByDescending(kv => r.Leaning.GetValueOrDefault(kv.Key)))
         {
             var s = progress.State;
-            var axis = path switch { "Speed" or "Midspeed" => "pass", "High Tech" => "tech", _ => "stars" };
+            var axis = ScoreSaberStyles.Style(path) switch { "Speed" or "Midspeed" => "pass", "High Tech" => "tech", _ when AccSaberTracks.IsTrack(path) => "complexity", _ => "stars" };
             Console.WriteLine();
             Console.WriteLine($"  == {path} — waypoint {progress.Current!.Index + 1}/{progress.WaypointCount} " +
                               $"(players here are typically rank ~{progress.Current.EquivalentRank:N0})");
-            Console.WriteLine($"     You: {axis} {s.Difficulty:F2}, acc vs predicted {s.AccuracyResidual:+0.0%;-0.0%} ({s.PathPlayCount} path plays)");
+            Console.WriteLine($"     You: {axis} {s.Difficulty:F2}, acc vs predicted {s.AccuracyResidual:+0.0%;-0.0%} ({s.PathPlayCount} path plays, " +
+                              $"{(AccSaberTracks.IsTrack(path) ? $"{s.PathPp:N1} AP" : $"path pp {s.PathPp:N1}")})");
             var next = progress.Next!;
             Console.WriteLine(progress.BeyondLastWaypoint
                 ? $"     Past the last waypoint — next step: {axis} {next.Difficulty:F2}, acc vs predicted {next.AccuracyResidual:+0.0%;-0.0%}; progress {progress.ProgressToNext:P0}"

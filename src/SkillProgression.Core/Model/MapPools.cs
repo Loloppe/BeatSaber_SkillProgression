@@ -16,9 +16,14 @@ namespace SkillProgression.Core.Model
 
     public static class MapPools
     {
-        /// <summary>AccSaber ranks accuracy maps only (D-023): on other styles its pool falls back to BeatLeader's.</summary>
+        /// <summary>
+        /// AccSaber ranks accuracy maps only (D-023): on other styles its pool falls back to BeatLeader's. AccSaber tracks
+        /// (D-061) always use AccSaber's maps, whatever the pool.
+        /// </summary>
         public static MapPool Effective(MapPool pool, string path) =>
-            pool == MapPool.AccSaber && path != Destinations.Accuracy ? MapPool.BeatLeader : pool;
+            AccSaberTracks.IsTrack(path) ? MapPool.AccSaber
+            : ScoreSaberStyles.IsSsPath(path) ? MapPool.ScoreSaber
+            : pool == MapPool.AccSaber && path != Destinations.Accuracy ? MapPool.BeatLeader : pool;
 
         public static bool Contains(MapPool pool, MapEntry map) => pool switch
         {

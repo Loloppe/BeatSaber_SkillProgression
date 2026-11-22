@@ -5,6 +5,7 @@ using IPA.Utilities;
 using SkillProgression.Data.BeatLeader;
 using SkillProgression.Data.Platforms;
 using SkillProgression.Data.Plays;
+using SkillProgression.Data.ScoreSaber;
 using SkillProgression.Plugin.Gameplay;
 using SkillProgression.Plugin.Services;
 using Zenject;
@@ -26,6 +27,6 @@ internal class AppInstaller : Installer
         Container.Bind<MapDownloader>().FromInstance(new MapDownloader(http)).AsSingle();
         Container.Bind<ProgressionService>().FromInstance(new ProgressionService(
             dataDir, playLog, new BeatLeaderClient(http), new PlatformStatsClient(http),
-            new LiveMapClient(http, Path.Combine(dataDir, "live-maps.json")))).AsSingle();
+            new LiveMapClient(http, Path.Combine(dataDir, "live-maps.json")), new ScoreSaberClient(http))).AsSingle();
     }
 }

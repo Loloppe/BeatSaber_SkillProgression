@@ -32,15 +32,16 @@ public class PeerTargetsTests
     }
 
     [Fact]
-    public void Curve_interpolates_between_levels_and_moves_with_the_level_past_the_ends()
+    public void Curve_interpolates_moves_with_the_level_below_and_stops_at_its_top()
     {
         var c = Curve(0.95, (-0.01, 0.93), (0.0, 0.95), (0.01, 0.96));
         Assert.Equal(0.94, PeerTargets.At(c, -0.005), 9);
         Assert.Equal(0.955, PeerTargets.At(c, 0.005), 9);
         Assert.Equal(0.91, PeerTargets.At(c, -0.03), 9);
-        Assert.Equal(0.965, PeerTargets.At(c, 0.015), 9);
+        // Above the best players' level the target stays at the curve's top (user, 2026-11-22).
+        Assert.Equal(0.96, PeerTargets.At(c, 0.015), 9);
+        Assert.Equal(0.96, PeerTargets.At(c, 0.1), 9);
         Assert.Equal(0.97, PeerTargets.At(Curve(0.96), 0.01), 9);
-        Assert.Equal(PathAnalyzer.MaxTargetAccuracy, PeerTargets.At(c, 0.1));
     }
 
     [Fact]

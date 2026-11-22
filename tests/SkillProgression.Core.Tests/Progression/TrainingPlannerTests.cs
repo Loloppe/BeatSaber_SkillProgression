@@ -48,11 +48,11 @@ public class TrainingPlannerTests
     }
 
     [Fact]
-    public void Polish_targets_ask_for_a_small_gain_not_the_full_waypoint_target()
+    public void Polish_targets_ask_for_the_full_target_like_new_maps()
     {
         var polish = new Objective { Kind = ObjectiveKind.Polish, Maps = { Rec("p1", 0.98, 0.96) } };
         var item = TrainingPlanner.NextUp(Progress(polish), Array.Empty<PlayRecord>(), new HashSet<MapKey>()).Single();
-        Assert.Equal(0.965, item.TargetAccuracy, 9);
+        Assert.Equal(0.98, item.TargetAccuracy, 9);
     }
 
     [Fact]
@@ -114,12 +114,9 @@ public class TrainingPlannerTests
     }
 
     [Fact]
-    public void Smaller_steps_lower_the_per_map_accuracy_gain()
+    public void Smaller_steps_shorten_the_step_line_target()
     {
         var polish = new Objective { Kind = ObjectiveKind.Polish, CurrentValue = -0.02, TargetValue = 0.0 };
-        var rec = new MapRecommendation { TargetAccuracy = 0.99, CurrentAccuracy = 0.95 };
-        Assert.Equal(0.955, TrainingPlanner.ShortTermAccuracy(polish, rec), 6);
-        Assert.True(TrainingPlanner.ShortTermAccuracy(polish, rec, 6) < 0.955);
         Assert.Equal(0.02 / 6, TrainingPlanner.Step(polish, 6).Target + 0.02, 6);
     }
 

@@ -160,8 +160,8 @@ namespace SkillProgression.Core.Achievements
         /// <summary>Different maps (not plays) at or above <paramref name="difficulty"/> on the path, cleared in the last 7 days.</summary>
         public static int WeeklyMapsAtLevel(string path, double difficulty, IEnumerable<RatedPlay> recentLocalPlays, DestinationThresholds t, DateTime nowUtc) =>
             recentLocalPlays
-                .Where(r => nowUtc - r.Evidence.TimeUtc <= ConsistencyWindow && PathRules.IsRelevant(path, r.Ratings, t)
-                            && PathRules.Axis(path, r.Ratings) >= difficulty)
+                .Where(r => nowUtc - r.Evidence.TimeUtc <= ConsistencyWindow && PathRules.IsRelevant(path, r, t)
+                            && PathRules.Axis(path, r) >= difficulty)
                 .Select(r => r.Evidence.Map).Distinct().Count();
 
         /// <param name="previous">Last saved snapshot (null on first run: everything found is retroactive).</param>
@@ -175,16 +175,20 @@ namespace SkillProgression.Core.Achievements
                 found.Add(new Achievement { Id = id, Kind = kind, Title = title, UnlockedUtc = nowUtc, Retroactive = retroactive || quiet });
             }
 
+            // AccSaber tracks (D-061) and ScoreSaber styles (D-062) are new in older progress files: the first time a
+            // family of paths is computed, everything found on it is quiet.
+            var knownFamilies = new HashSet<string>(previous?.Paths.Keys.Select(PathNames.Family) ?? Enumerable.Empty<string>());
             foreach (var kv in current.Paths)
             {
                 var path = kv.Key;
                 var p = kv.Value;
+                var quiet = previous != null && !knownFamilies.Contains(PathNames.Family(path));
                 // Milestone 1 is the entry point of a path, not an achievement.
                 for (var m = 2; m <= p.Milestone; m++)
-                    Add($"milestone|{path}|{m}", AchievementKind.Milestone, $"{path} milestone {m} reached");
+                    Add($"milestone|{path}|{m}", AchievementKind.Milestone, $"{PathNames.Display(path)} milestone {m} reached", quiet);
 
                 foreach (var tier in ConsistencyTiers.Where(n => p.WeeklyMapsAtLevel >= n))
-                    Add($"consistency|{path}|{tier}", AchievementKind.Consistency, ConsistencyTitle(path, tier));
+                    Add($"consistency|{path}|{tier}", AchievementKind.Consistency, ConsistencyTitle(path, tier), quiet);
             }
 
             // Records are new in older progress files: the first time they are computed, everything found is quiet.
@@ -207,7 +211,7 @@ namespace SkillProgression.Core.Achievements
             return found;
         }
 
-        public static string ConsistencyTitle(string path, int tier) => $"{tier} different {path} maps at your level in a week";
+        public static string ConsistencyTitle(string path, int tier) => $"{tier} different {PathNames.Display(path)} maps at your level in a week";
 
         public static string RecordTitle(string axis, int tier) => axis switch
         {

@@ -29,23 +29,46 @@ internal class AchievementsViewController : ViewController
     {
         if (firstActivation)
         {
-            _view = new AchievementsView { OnCategoryChanged = ShowCategory, OnHistorySourceChanged = ShowHistory };
+            _view = new AchievementsView
+            {
+                OnCategoryChanged = ShowCategory, OnHistorySourceChanged = ShowHistory,
+                OnSystemChanged = () => { _view!.Select(DefaultStyle(_view.System.Value)); ShowCategory(); },
+            };
             _view.Use(transform);
             _view.WithRectExpand();
             var sources = new Dictionary<string, BsDropdownItem>();
             foreach (var p in Platforms) sources[p] = new BsDropdownItem($"{p} rank", null);
-            foreach (var d in Destinations.All) sources["style|" + d] = new BsDropdownItem($"{(d == Destinations.HighTech ? "Tech" : d)} milestones", null);
+            foreach (var d in Destinations.All) sources["style|" + d] = new BsDropdownItem($"BL {(d == Destinations.HighTech ? "Tech" : d)} milestones", null);
+            foreach (var t in AccSaberTracks.All) sources["style|" + t] = new BsDropdownItem($"{t} milestones", null);
+            foreach (var d in Destinations.All)
+                sources["style|" + ScoreSaberStyles.Id(d)] = new BsDropdownItem($"SS {(d == Destinations.HighTech ? "Tech" : d)} milestones", null);
             sources[AccByStar] = new BsDropdownItem("Best accuracy per star", null);
             _view.HistorySources.Value = sources;
         }
         if (addedToHierarchy)
         {
             _overview = _service.Overview();
-            // Style buttons open on the focus style, like Training.
-            if (!string.IsNullOrEmpty(_service.State.FocusPath)) _view!.Style.Value = _service.State.FocusPath;
+            // The ranked system opens on Training's (Any ranked: BeatLeader), on the focus style like Training (user, 2026-11-22).
+            _view!.System.Value = _service.State.MapPool switch
+            {
+                Core.Model.MapPool.ScoreSaber => RankedSystem.ScoreSaber,
+                Core.Model.MapPool.AccSaber => RankedSystem.AccSaber,
+                _ => RankedSystem.BeatLeader,
+            };
+            _view.Select(DefaultStyle(_view.System.Value));
             ShowCategory();
             ShowHistory();
         }
+    }
+
+    /// <summary>Training's focus in a ranked system: its AccSaber track, or its style (measured on ScoreSaber for ScoreSaber).</summary>
+    private string DefaultStyle(RankedSystem system)
+    {
+        var state = _service.State;
+        if (system == RankedSystem.AccSaber)
+            return AccSaberTracks.IsTrack(state.AccSaberFocus) ? state.AccSaberFocus : AccSaberTracks.TrueAcc;
+        var style = string.IsNullOrEmpty(state.FocusPath) ? Destinations.Midspeed : state.FocusPath;
+        return system == RankedSystem.ScoreSaber ? ScoreSaberStyles.Id(style) : style;
     }
 
     private void ShowCategory()

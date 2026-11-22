@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using SkillProgression.Core.Maps;
 using SkillProgression.Core.Model;
+using SkillProgression.Core.Profiles;
 
 namespace SkillProgression.Core.Progression
 {
@@ -89,7 +90,7 @@ namespace SkillProgression.Core.Progression
         public static PathProgress? Analyze(string path, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog)
         {
             var pathModel = model.Paths.FirstOrDefault(p => p.Destination == path);
-            var state = PathState.Compute(path, bestPlays, model.Thresholds);
+            var state = PathState.Compute(path, bestPlays, model.Thresholds, model.AccSaber);
             if (pathModel == null || state == null || pathModel.Waypoints.Count == 0) return null;
 
             var wps = pathModel.Waypoints.OrderBy(w => w.Index).ToList();
@@ -105,6 +106,22 @@ namespace SkillProgression.Core.Progression
                 var tolerance = GateTolerance * Positive(pathModel.DifficultySpread);
                 var reached = 0;
                 for (var i = 0; i < wps.Count; i++) if (state.Difficulty >= targetD[i] - tolerance) reached = i;
+                idx = Math.Min(idx, reached);
+            }
+            if (pathModel.AccuracyGated)
+            {
+                // Same rule on accuracy vs predicted, with the waypoints' accuracy made non-decreasing. The tolerance is a
+                // share of the step from the previous waypoint, not of the path's spread: the cross-sectional SS sample
+                // spans 78% to 99% accuracy, so a spread-based tolerance (~2%) let a -1.2% player pass a +0.1% waypoint.
+                var targetA = wps[0].AccuracyResidual;
+                var reached = 0;
+                for (var i = 1; i < wps.Count; i++)
+                {
+                    var previous = targetA;
+                    targetA = Math.Max(targetA, wps[i].AccuracyResidual);
+                    if (state.AccuracyResidual >= targetA - GateTolerance * (targetA - previous)) reached = i;
+                    else break;
+                }
                 idx = Math.Min(idx, reached);
             }
             var current = wps[idx];
@@ -126,7 +143,9 @@ namespace SkillProgression.Core.Progression
             }
             progress.Next = next;
 
-            ProfileProgress(progress, state, current, targetD[idx], next, nextD, pathModel);
+            // AccSaber tracks (D-061, user): clearing harder maps isn't a goal there, accuracy is.
+            var track = AccSaberTracks.IsTrack(path);
+            ProfileProgress(progress, state, current, targetD[idx], next, nextD, pathModel, countDifficulty: !track);
 
             var pushGap = Math.Max(0, nextD - state.Difficulty) / Positive(pathModel.DifficultySpread);
             var polishGap = Math.Max(0, next.AccuracyResidual - state.AccuracyResidual) / Positive(pathModel.AccuracySpread);
@@ -140,21 +159,28 @@ namespace SkillProgression.Core.Progression
             var estimator = AccuracyEstimator.Fit(path, bestPlays, model.Thresholds);
             var accuracyStep = Math.Max(0, next.AccuracyResidual - state.AccuracyResidual) / TrainingPlanner.StepsPerWaypointGap;
             var peers = PeerTargets.For(bestPlays, model);
+            // Tracks (D-061, user): new maps by the AP they'd add at their target, popularity only breaks ties.
+            var gain = PathRules.TrackGain(path, bestPlays, model);
 
-            List<MapRecommendation> NewMaps(double low, double high, double centre) => Diversify(catalog.Recommendable(path)
+            List<MapRecommendation> NewMaps(double low, double high, double centre) => Diversify(OrderNew(catalog.Recommendable(path)
                 .Where(m => !played.ContainsKey(Key(m)) && m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
-                .Select(m => (map: m, axis: PathRules.Axis(path, m.Ratings[""])))
+                .Select(m => (map: m, axis: PathRules.Axis(path, m, m.Ratings[""])))
                 .Where(x => x.axis >= low && x.axis <= high)
                 .Select(x => new MapRecommendation
                 {
                     Map = Key(x.map), Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars, Njs = x.map.Njs, Nps = x.map.Nps,
                     TargetAccuracy = peers.Target(path, x.map)
-                                     ?? Math.Min(MaxTargetAccuracy, estimator.Expected(x.map.Ratings[""], path) + accuracyStep),
+                                     ?? Math.Min(MaxTargetAccuracy, estimator.Expected(x.map, x.map.Ratings[""], path) + accuracyStep),
                     PeerPopularity = x.map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
-                })
-                .OrderByDescending(r => r.PeerPopularity).ThenBy(r => Math.Abs(r.AxisRating - centre)), catalog);
+                }), centre), catalog);
 
-            var push = pushGap > 0
+            IEnumerable<MapRecommendation> OrderNew(IEnumerable<MapRecommendation> maps, double centre) => gain != null
+                ? maps.OrderByDescending(r => gain(r.AxisRating, r.TargetAccuracy)).ThenByDescending(r => r.PeerPopularity)
+                : maps.OrderByDescending(r => r.PeerPopularity).ThenBy(r => Math.Abs(r.AxisRating - centre));
+
+            // Tracks: new maps only around the player's own complexity, for the AP they add (no "clear harder maps").
+            var push = track ? AtLevel(state, current, next, pathModel, NewMaps)
+                : pushGap > 0
                 ? new Objective
                 {
                     Kind = ObjectiveKind.Push, Gap = pushGap, Priority = pushGap * 2 * pathModel.PushPrior,
@@ -170,7 +196,7 @@ namespace SkillProgression.Core.Progression
                 .Where(p => PathRules.IsRecommendable(catalog, p.Map, p.Ratings, path, model.Thresholds))
                 // D-058: with a peer level on the style, only maps with a peer target (no mixing with the residual rule).
                 .Where(p => !peers.Covers(path) || PeerTarget(peers, path, p) != null)
-                .Select(p => (play: p, axis: PathRules.Axis(path, p.Ratings)))
+                .Select(p => (play: p, axis: PathRules.Axis(path, p)))
                 .ToList();
             var polishCentre = state.Difficulty;
             if (state.Difficulty > nextD && polishCandidates.Any(x => Math.Abs(x.axis - nextD) <= PolishWindow
@@ -240,7 +266,7 @@ namespace SkillProgression.Core.Progression
             var playedSet = new HashSet<MapKey>(played);
             var maps = catalog.Recommendable(path)
                 .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
-                .Select(m => (map: m, key: Key(m), axis: PathRules.Axis(path, m.Ratings[""])))
+                .Select(m => (map: m, key: Key(m), axis: PathRules.Axis(path, m, m.Ratings[""])))
                 .Where(x => !playedSet.Contains(x.key) && x.axis <= easier && x.axis >= floor)
                 .Select(x => new MapRecommendation
                 {
@@ -263,8 +289,9 @@ namespace SkillProgression.Core.Progression
         /// pp's own step is the unit). On gated paths the bar can't run ahead of difficulty: pp from easier maps alone
         /// doesn't count as progress there.
         /// </summary>
+        /// <param name="countDifficulty">False on AccSaber tracks (D-061): only AP and accuracy make progress.</param>
         private static void ProfileProgress(PathProgress progress, PathState state, WaypointModel current, double currentD,
-            WaypointModel next, double nextD, PathModel pathModel)
+            WaypointModel next, double nextD, PathModel pathModel, bool countDifficulty = true)
         {
             double Share(double value, double from, double to) =>
                 to > from ? Clamp01((value - from) / (to - from)) : value >= to ? 1 : 0;
@@ -273,7 +300,7 @@ namespace SkillProgression.Core.Progression
             {
                 (key: "pp", share: Share(state.PathPp, current.PathPpLow, next.PathPpLow), step: 1.0),
                 (key: "difficulty", share: Share(state.Difficulty, currentD, nextD),
-                 step: (nextD - currentD) / Positive(pathModel.DifficultySpread)),
+                 step: countDifficulty ? (nextD - currentD) / Positive(pathModel.DifficultySpread) : 0),
                 (key: "accuracy", share: Share(state.AccuracyResidual, current.AccuracyResidual, next.AccuracyResidual),
                  step: (next.AccuracyResidual - current.AccuracyResidual) / Positive(pathModel.AccuracySpread)),
             };
@@ -281,6 +308,7 @@ namespace SkillProgression.Core.Progression
             var weight = dims.Sum(d => d.step * d.step);
             var bar = weight <= 0 ? 0 : dims.Sum(d => d.step * d.step * d.share) / weight;
             if (pathModel.DifficultyGated) bar = Math.Min(bar, progress.DimensionProgress["difficulty"]);
+            if (pathModel.AccuracyGated) bar = Math.Min(bar, progress.DimensionProgress["accuracy"]);
             progress.ProgressToNext = Clamp01(bar);
         }
 

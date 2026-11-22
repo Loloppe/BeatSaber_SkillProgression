@@ -4,6 +4,7 @@ using System.Linq;
 using SkillProgression.Core.Maps;
 using SkillProgression.Core.Model;
 using SkillProgression.Core.Plays;
+using SkillProgression.Core.Profiles;
 
 namespace SkillProgression.Core.Progression
 {
@@ -57,6 +58,7 @@ namespace SkillProgression.Core.Progression
         /// <summary>Peer target on <paramref name="map"/> for <paramref name="path"/>, or null (see class remarks).</summary>
         public double? Target(string path, MapEntry map)
         {
+            path = ScoreSaberStyles.Style(path); // D-062: ScoreSaber styles use their BeatLeader style's peer cells
             var key = new MapKey(map.Hash, map.Characteristic, map.Difficulty);
             var band = map.PeerTargets.Keys.FirstOrDefault(k => k.StartsWith(path + "|", StringComparison.Ordinal));
             if (band != null && Level(band, key) is double bandLevel) return At(map.PeerTargets[band], bandLevel);
@@ -68,7 +70,7 @@ namespace SkillProgression.Core.Progression
         /// Whether the player has a peer level on the style: then lists of played maps only show maps with a peer target,
         /// so fallback targets (another rule, often much harder) never mix into the same ranking (D-058).
         /// </summary>
-        public bool Covers(string path) => Level(path) != null;
+        public bool Covers(string path) => Level(ScoreSaberStyles.Style(path)) != null;
 
         /// <summary>The player's level in a cell over all their maps there; null under the minimum map count.</summary>
         public double? Level(string cell) => Level(cell, default);
@@ -82,8 +84,9 @@ namespace SkillProgression.Core.Progression
         }
 
         /// <summary>
-        /// The curve at a level: linear between stored levels; past either end the end value moves one for one with the
-        /// level (as the adjusted bands do); ease + level when the map has no stored values.
+        /// The curve at a level: linear between stored levels; below the first one the value moves one for one with the
+        /// level (as the adjusted bands do); above the last one it stays at the curve's top (user, 2026-11-22: extending
+        /// it upward gave top players targets nobody reaches); ease + level when the map has no stored values.
         /// </summary>
         public static double At(PeerCurve curve, double level)
         {
@@ -91,7 +94,7 @@ namespace SkillProgression.Core.Progression
             double v;
             if (n == 0) v = curve.Ease + level;
             else if (level <= curve.Levels[0]) v = curve.Values[0] + (level - curve.Levels[0]);
-            else if (level >= curve.Levels[n - 1]) v = curve.Values[n - 1] + (level - curve.Levels[n - 1]);
+            else if (level >= curve.Levels[n - 1]) v = curve.Values[n - 1];
             else
             {
                 var i = 1;

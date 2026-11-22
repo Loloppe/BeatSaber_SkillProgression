@@ -39,7 +39,10 @@ BeatLeader scores into a structured, in-game skill progression experience. UI us
 - Raw attempts / per-player population records must never be committed or published (D-007).
 - Model: `cd training && .venv/Scripts/python fetch_pool_ratings.py` (SS/AccSaber maps' BL ratings, cached; D-041)
   and `.venv/Scripts/python fetch_curated.py` (BeatSaver curated maps' BL ratings, cached; ~1 h first run; D-045) and
-  `.venv/Scripts/python fetch_peer_scores.py` (every BL score on the SS/AccSaber maps, compact cache, local only; hours first run; D-058) then `.venv/Scripts/python build_model.py` → `data/model/model.json.gz` (needs explorations 02–06 outputs in data/explore). CLI: `dotnet run --project tools/SkillProgression.Tools -- player <blId>` and
+  `.venv/Scripts/python fetch_peer_scores.py` (every BL score on the SS/AccSaber maps, compact cache, local only; hours first run; D-058) and `.venv/Scripts/python fetch_accsaber.py` (AccSaber categories,
+  curves, AP at rank milestones + BL scores on BL-ranked AccSaber maps; run after fetch_peer_scores; D-061) and
+  `.venv/Scripts/python fetch_scoresaber.py` (SS ranked stars, curve, pp at rank milestones + top scores of ~1,000 sampled
+  SS players, local only; ~40 min first run; D-062) then `.venv/Scripts/python build_model.py` → `data/model/model.json.gz` (needs explorations 02–06 outputs in data/explore). CLI: `dotnet run --project tools/SkillProgression.Tools -- player <blId>` and
   `-- check-anchors` (must stay 11/11 after any rules/model change) and `-- check-peers` (Core's peer levels vs the fit, D-058).
 - Dev environment for Reactive v2 + BeatLeader: installed in the 1.40.8 instance (D-016); see `tools/dev-env/README.md`.
 - Population DB (D-015): `../portaBLerebalancer2/wwwroot/db-20261104211323-3944.db` — open read-only.

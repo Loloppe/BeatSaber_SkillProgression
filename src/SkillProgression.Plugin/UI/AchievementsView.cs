@@ -28,8 +28,23 @@ internal enum ProgressTab
 /// achievement of that type, unlocked and not, in order, optionally hiding achieved ones (D-034, D-035). History: a
 /// dropdown picks the chart. Presentation only.
 /// </summary>
+/// <summary>Whose styles the Achievements tab shows (user, 2026-11-22): BeatLeader's, ScoreSaber's (D-062) or AccSaber's tracks (D-061).</summary>
+internal enum RankedSystem
+{
+    BeatLeader,
+    ScoreSaber,
+    AccSaber,
+}
+
 internal class AchievementsView : ReactiveComponent
 {
+    private static readonly Dictionary<RankedSystem, BsDropdownItem> Systems = new()
+    {
+        [RankedSystem.BeatLeader] = new("BeatLeader", null),
+        [RankedSystem.ScoreSaber] = new("ScoreSaber", null),
+        [RankedSystem.AccSaber] = new("AccSaber", null),
+    };
+
     private static readonly Color Dim = new(0.6f, 0.6f, 0.6f);
     private static readonly Color Bright = new(0.95f, 0.95f, 0.95f);
 
@@ -59,7 +74,14 @@ internal class AchievementsView : ReactiveComponent
     };
 
     public State<ProgressTab> Tab { get; } = new(ProgressTab.Achievements);
+    /// <summary>The style or AccSaber track shown; set it with <see cref="Select"/>.</summary>
     public State<string> Style { get; } = new(Destinations.Midspeed);
+    /// <summary>AccSaber tracks instead of styles: Training's pool is AccSaber (D-061).</summary>
+    public State<RankedSystem> System { get; } = new(RankedSystem.BeatLeader);
+    /// <summary>The ranked system changed: the controller selects that system's style and refreshes.</summary>
+    public Action? OnSystemChanged { get; set; }
+    private State<string> StyleButton { get; } = new(Destinations.Midspeed);
+    private State<string> TrackButton { get; } = new(AccSaberTracks.TrueAcc);
     public State<AchievementCategory> Category { get; } = new(AchievementCategory.AlmostThere);
     public State<bool> HideAchieved { get; } = new(false);
     public State<IReadOnlyList<AchievementRow>> Rows { get; } = new(Array.Empty<AchievementRow>());
@@ -82,6 +104,14 @@ internal class AchievementsView : ReactiveComponent
 
     public IReadOnlyList<Vector2> ChartPoints { set => _chart.Points = value; }
 
+    /// <summary>Selects a style or an AccSaber track (D-061) without raising <see cref="OnCategoryChanged"/>.</summary>
+    public void Select(string path)
+    {
+        Style.Value = path;
+        if (AccSaberTracks.IsTrack(path)) TrackButton.Value = path;
+        else StyleButton.Value = ScoreSaberStyles.Style(path);
+    }
+
     protected override GameObject Construct()
     {
         var scroll = new ScrollContext();
@@ -98,13 +128,44 @@ internal class AchievementsView : ReactiveComponent
                     sKey = Tab,
                     OnKeyChanged = t => Tab.Value = t,
                 },
-                new BsSegmentedControl<string>
+                new Layout
                 {
                     sEnabled = Tab.Map(t => t == ProgressTab.Achievements),
-                    FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
-                    Items = StyleItems,
-                    sKey = Style,
-                    OnKeyChanged = k => { Style.Value = k; OnCategoryChanged?.Invoke(); },
+                    FlexController = { AlignItems = Align.Center, Gap = 2.pt },
+                    Children =
+                    {
+                        new Layout
+                        {
+                            FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
+                            Children =
+                            {
+                                new BsSegmentedControl<string>
+                                {
+                                    sEnabled = System.Map(s => s != RankedSystem.AccSaber),
+                                    FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
+                                    Items = StyleItems,
+                                    sKey = StyleButton,
+                                    OnKeyChanged = k => { Select(System.Value == RankedSystem.ScoreSaber ? ScoreSaberStyles.Id(k) : k); OnCategoryChanged?.Invoke(); },
+                                },
+                                new BsSegmentedControl<string>
+                                {
+                                    sEnabled = System.Map(s => s == RankedSystem.AccSaber),
+                                    FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
+                                    Items = TrainingView.TrackItems,
+                                    sKey = TrackButton,
+                                    OnKeyChanged = k => { Select(k); OnCategoryChanged?.Invoke(); },
+                                },
+                            }
+                        },
+                        new BsDropdown<RankedSystem>
+                        {
+                            FlexItem = { Size = new() { x = 28.pt, y = 5.5f.pt } },
+                            ModalParams = new() { MaxVisibleRows = 3 },
+                            Items = Systems,
+                            sKey = System,
+                            OnKeyChanged = s => { if (s != System.Value) { System.Value = s; OnSystemChanged?.Invoke(); } },
+                        },
+                    }
                 },
 
                 // Achievements tab

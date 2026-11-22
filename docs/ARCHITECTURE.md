@@ -33,9 +33,15 @@ Fresh start (D-010) = evidence filter (ignore/decay before a date) + calibration
 - `thresholds`: destination rules (profiles.THRESHOLDS).
 - `leaning`: features, peer baseline (level → medians), scaler, coefficients (exploration 06).
 - `paths[]`: per destination: axis, relevance rule id, prior (push share), `waypoints[]` (path-pp range, D, A, acc,
-  typical equivalent rank).
+  typical equivalent rank). Also the AccSaber tracks "True Acc" / "Standard Acc" / "Tech Acc" (D-061): path pp =
+  category AP, D = complexity, waypoints at AccSaber category ranks, built cross-sectionally (`training/accsaber_tracks.py`).
+- `accSaber` (D-061): AccSaber score curve points, scale, shift and weight-curve parameters (AP and category AP in Core).
+- `scoreSaber` (D-062): SS pp curve, factor 42.117, decay 0.965, ranked-realm modifier values. Paths also hold the
+  ScoreSaber-measured styles "SS Accuracy" … "SS Extreme" (SS pp, milestones at SS global ranks, from sampled SS
+  players; `training/scoresaber_styles.py`). The plugin analyses them on ScoreSaber scores + plugin plays only.
 - `maps[]`: per BL-ranked difficulty: MapKey, ratings per speed modifier (none/SS/FS/SF: stars, pass, acc, tech,
   predicted acc), name + mapper, map type, duration, NJS (D-056) and NPS (D-059; 0 = unknown), pool flags (BL/SS/AccSaber, D-023), **pp lookup curve per speed modifier**,
+  `AccSaberCategory` + `AccSaberComplexity` on AccSaber maps (D-061), `ScoreSaberStars` on SS maps (D-062),
   peer popularity per (path, waypoint), `Curated` + `BeatSaverScore` (D-045), `PeerTargets` by cell ("Style" and
   "Style|band": ease + accuracy at ~16 population levels, D-058; top-level `PeerTargets` lists the cells). Also curated maps ranked nowhere
   (ratings only, empty pp curves): Explore's Curated pool only — the progression engine never sees them.

@@ -50,12 +50,12 @@ namespace SkillProgression.Core.Progression
 
         public double Residual(double axis) => _intercept + _slope * axis;
 
-        public double Expected(MapRatings ratings, string path) =>
-            Clamp(ratings.PredictedAcc + Residual(PathRules.Axis(path, ratings)), 0.5, 0.9995);
+        public double Expected(MapEntry map, MapRatings ratings, string path) =>
+            Clamp(ratings.PredictedAcc + Residual(PathRules.Axis(path, map, ratings)), 0.5, 0.9995);
 
         public static AccuracyEstimator Fit(string path, IReadOnlyList<RatedPlay> bestPlays, DestinationThresholds t)
         {
-            var plays = bestPlays.Where(p => p.Pp > 0 && PathRules.IsRelevant(path, p.Ratings, t)).ToList();
+            var plays = bestPlays.Where(p => PathRules.Value(path, p) > 0 && PathRules.IsRelevant(path, p, t)).ToList();
             if (plays.Count == 0)
             {
                 var all = bestPlays.Where(p => p.Pp > 0).ToList();
@@ -63,9 +63,9 @@ namespace SkillProgression.Core.Progression
                 return new AccuracyEstimator(overall, 0);
             }
 
-            var x = plays.Select(p => PathRules.Axis(path, p.Ratings)).ToArray();
+            var x = plays.Select(p => PathRules.Axis(path, p)).ToArray();
             var y = plays.Select(p => p.Accuracy - p.Ratings.PredictedAcc).ToArray();
-            var w = plays.Select(p => p.Pp).ToArray();
+            var w = plays.Select(p => PathRules.Value(path, p)).ToArray();
             var mx = Stats.WeightedAverage(x, w);
             var my = Stats.WeightedAverage(y, w);
             if (plays.Count < MinPlaysForSlope) return new AccuracyEstimator(my, 0);
@@ -180,7 +180,7 @@ namespace SkillProgression.Core.Progression
                 Estimator = AccuracyEstimator.Fit(path, rankedPlays, t),
                 Peers = PeerTargets.For(rankedPlays, model),
                 Level = level
-                        ?? PathState.Compute(path, rankedPlays, t)?.Difficulty
+                        ?? PathState.Compute(path, rankedPlays, t, model.AccSaber)?.Difficulty
                         ?? pathModel?.Waypoints.OrderBy(w => w.Index).FirstOrDefault()?.Difficulty ?? 0,
             };
 
@@ -192,9 +192,9 @@ namespace SkillProgression.Core.Progression
                     .Where(p => !ctx.Peers.Covers(path) || PathAnalyzer.PeerTarget(ctx.Peers, path, p) != null)
                     .Select(p => new ExploreItem
                     {
-                        Map = p.Evidence.Map, Name = p.Map.Name, Mapper = p.Map.Mapper, AxisRating = PathRules.Axis(path, p.Ratings), Stars = p.Ratings.Stars, Njs = p.Map.Njs, Nps = p.Map.Nps,
+                        Map = p.Evidence.Map, Name = p.Map.Name, Mapper = p.Map.Mapper, AxisRating = PathRules.Axis(path, p), Stars = p.Ratings.Stars, Njs = p.Map.Njs, Nps = p.Map.Nps,
                         // D-058: players at their level; without peer data the estimate.
-                        ExpectedAccuracy = PathAnalyzer.PeerTarget(ctx.Peers, path, p) ?? ctx.Estimator.Expected(p.Ratings, path),
+                        ExpectedAccuracy = PathAnalyzer.PeerTarget(ctx.Peers, path, p) ?? ctx.Estimator.Expected(p.Map, p.Ratings, path),
                         CurrentAccuracy = p.Accuracy,
                     })
                     .Where(i => i.ExpectedAccuracy - i.CurrentAccuracy >= MinGain)
@@ -207,15 +207,26 @@ namespace SkillProgression.Core.Progression
             var popularityKeys = pathModel?.Waypoints.Select(w => $"{path}|{w.Index}").ToArray() ?? Array.Empty<string>();
             // Curated maps have no peer popularity (no population scores): rank them by BeatSaver score instead.
             var curated = MapPools.Effective(catalog.Pool, path) == MapPool.Curated;
+            // AccSaber tracks (D-061, user): by the AP the expected accuracy would add, popularity only breaks ties.
+            var gain = PathRules.TrackGain(path, rankedPlays, model);
             ctx.Pool = catalog.Recommendable(path)
                 .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, t))
                 .Select(m => (map: m, key: new MapKey(m.Hash, m.Characteristic, m.Difficulty), r: m.Ratings[""]))
                 .Where(x => !played.Contains(x.key))
-                .Select(x => (new ExploreItem
+                .Select(x => (item: new ExploreItem
                 {
-                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = PathRules.Axis(path, x.r), Stars = x.r.Stars, Njs = x.map.Njs, Nps = x.map.Nps,
-                    ExpectedAccuracy = ctx.Peers.Target(path, x.map) ?? ctx.Estimator.Expected(x.r, path),
-                }, curated ? x.map.BeatSaverScore : popularityKeys.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0)))
+                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = PathRules.Axis(path, x.map, x.r), Stars = x.r.Stars, Njs = x.map.Njs, Nps = x.map.Nps,
+                    ExpectedAccuracy = ctx.Peers.Target(path, x.map) ?? ctx.Estimator.Expected(x.map, x.r, path),
+                }, x.map))
+                .Select(x =>
+                {
+                    var popularity = popularityKeys.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0);
+                    // Popularity only breaks ties on tracks: it can't outweigh a hundredth of an AP.
+                    var rank = curated ? x.map.BeatSaverScore
+                        : gain != null ? gain(x.item.AxisRating, x.item.ExpectedAccuracy) + popularity * 1e-6
+                        : popularity;
+                    return (x.item, rank);
+                })
                 .ToList();
             return WithRange(ctx);
         }

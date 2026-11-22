@@ -47,7 +47,11 @@ internal class ExploreView : ReactiveComponent
     };
 
     public State<ExploreMode> Mode { get; } = new(ExploreMode.Improve);
+    /// <summary>The style or AccSaber track lists are built for; set it with <see cref="Select"/>.</summary>
     public State<string> Style { get; } = new(Destinations.Midspeed);
+    /// <summary>Button states: styles, and AccSaber's tracks with the AccSaber pool (D-061).</summary>
+    private State<string> StyleButton { get; } = new(Destinations.Midspeed);
+    private State<string> TrackButton { get; } = new(AccSaberTracks.TrueAcc);
     public State<MapPool> Pool { get; } = new(MapPool.AnyRanked);
     public State<int> Offset { get; } = new(0);
     public State<IReadOnlyList<MapRow>> Rows { get; } = new(Array.Empty<MapRow>());
@@ -66,6 +70,14 @@ internal class ExploreView : ReactiveComponent
     public Action<MapRow>? OnPlay { get; set; }
     /// <summary>"To Solo" (D-057): play the row's map from the game's Solo menu.</summary>
     public Action<MapRow>? OnToSolo { get; set; }
+
+    /// <summary>Selects a style or an AccSaber track (D-061) without raising <see cref="OnChanged"/>.</summary>
+    public void Select(string path)
+    {
+        Style.Value = path;
+        if (AccSaberTracks.IsTrack(path)) TrackButton.Value = path;
+        else StyleButton.Value = ScoreSaberStyles.Style(path);
+    }
 
     protected override GameObject Construct()
     {
@@ -88,12 +100,20 @@ internal class ExploreView : ReactiveComponent
                     {
                         new BsSegmentedControl<string>
                         {
+                            sEnabled = Pool.Map(p => p != MapPool.AccSaber),
                             FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
                             Items = StyleItems,
-                            sKey = Style,
-                            // AccSaber ranks accuracy maps only: the style is locked to Accuracy (user, 2026-11-11).
-                            sInteractable = Pool.Map(p => p != MapPool.AccSaber),
-                            OnKeyChanged = s => { Style.Value = s; OnChanged?.Invoke(); },
+                            sKey = StyleButton,
+                            // ScoreSaber pool: the same style measured on ScoreSaber (D-062).
+                            OnKeyChanged = s => { Select(Pool.Value == MapPool.ScoreSaber ? ScoreSaberStyles.Id(s) : s); OnChanged?.Invoke(); },
+                        },
+                        new BsSegmentedControl<string>
+                        {
+                            sEnabled = Pool.Map(p => p == MapPool.AccSaber),
+                            FlexItem = { Size = new() { x = 100.pt, y = 5.5f.pt } },
+                            Items = TrainingView.TrackItems,
+                            sKey = TrackButton,
+                            OnKeyChanged = s => { Select(s); OnChanged?.Invoke(); },
                         },
                         // Ranked pools are shared with Training (D-041); Curated is Explore only (D-045).
                         new BsDropdown<MapPool>
