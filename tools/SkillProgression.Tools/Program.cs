@@ -80,7 +80,7 @@ switch (args[0])
         foreach (var (id, cells) in fitted)
         {
             var rated = (await beatLeader.GetAllScoresAsync(id)).Select(engine.Catalog.Rate).Where(r => r != null).Select(r => r!).ToList();
-            var peers = PeerTargets.For(ProfileBuilder.BestPerMap(rated), model);
+            var peers = PeerTargets.For(ProfileBuilder.BestPerMap(rated), model, window: null); // all PBs, as the population fit (D-065)
             var diffs = cells.Select(c => (cell: c.Key, d: peers.Level(c.Key) is double core ? core - c.Value : (double?)null)).ToList();
             var known = diffs.Where(x => x.d != null).Select(x => Math.Abs(x.d!.Value)).OrderBy(x => x).ToList();
             var median = known.Count == 0 ? 0 : known[known.Count / 2];

@@ -162,3 +162,6 @@ Outstanding / known gaps:
   training-set players' scores since ranking — user choice, no attempts data needed). Full build re-run to save the
   levels; first update: +74 maps (45 newly ranked), 10 dropped; anchors 11/11, check-peers OK; model copied to the
   game (release zip not updated).
+- 2026-11-22 (cont.): Stale-PB bias in peer targets measured and tested (D-065): player level now from the last 12
+  months of their PBs (fallback all), best of 4 variants on 432k held-out PBs (−5% error, a third less bias, no more
+  impossible targets). 170 + 35 tests, anchors 11/11, check-peers OK, plugin copied (release zip not updated).

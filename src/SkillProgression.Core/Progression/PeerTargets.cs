@@ -15,13 +15,19 @@ namespace SkillProgression.Core.Progression
     /// the style-wide cell; null (callers keep their previous rule) when the style has too few maps too, the map has no
     /// curve, or the model predates D-058. On a played map the level leaves that map out, so its own score doesn't pull
     /// its target. Only <see cref="Comparable"/> scores count, on both sides (the population fit uses the same rule).
+    /// D-065 (user, variant C of a held-out test): the level uses the player's PBs from the <see cref="RecentWindow"/>
+    /// before their latest score — old unimproved PBs understated improving players' level (targets too easy) — and
+    /// falls back to all PBs when a cell has fewer than the minimum maps there. Map curves are unchanged.
     /// </summary>
     public sealed class PeerTargets
     {
         private readonly int _minMaps;
-        /// <summary>cell id -> (map, accuracy - ease) of the player's no-modifier PBs.</summary>
-        private readonly Dictionary<string, List<(MapKey map, double residual)>> _residuals =
-            new Dictionary<string, List<(MapKey, double)>>();
+        /// <summary>cell id -> (map, accuracy - ease, recent) of the player's no-modifier PBs.</summary>
+        private readonly Dictionary<string, List<(MapKey map, double residual, bool recent)>> _residuals =
+            new Dictionary<string, List<(MapKey, double, bool)>>();
+
+        /// <summary>D-065: PBs this long before the player's latest score form their level (12 months, ~365 days).</summary>
+        public static readonly TimeSpan RecentWindow = TimeSpan.FromDays(365);
 
         public static readonly PeerTargets None = new PeerTargets(int.MaxValue);
 
@@ -38,18 +44,23 @@ namespace SkillProgression.Core.Progression
 
         private PeerTargets(int minMaps) => _minMaps = minMaps;
 
-        public static PeerTargets For(IEnumerable<RatedPlay> bestPlays, ModelFile model)
+        /// <param name="window">How far back from the latest score PBs form the level (default <see cref="RecentWindow"/>);
+        /// null = every PB (the population fit's rule, used by the CLI's check-peers).</param>
+        public static PeerTargets For(IEnumerable<RatedPlay> bestPlays, ModelFile model) => For(bestPlays, model, RecentWindow);
+
+        public static PeerTargets For(IEnumerable<RatedPlay> bestPlays, ModelFile model, TimeSpan? window)
         {
             if (model.PeerTargets == null) return None;
             var targets = new PeerTargets(Math.Max(1, model.PeerTargets.MinPlayerMaps));
-            foreach (var p in bestPlays)
+            var plays = bestPlays.Where(p => Comparable(p.Evidence)).ToList();
+            var since = window is TimeSpan w && plays.Count > 0 ? plays.Max(p => p.Evidence.TimeUtc) - w : DateTime.MinValue;
+            foreach (var p in plays)
             {
-                if (!Comparable(p.Evidence)) continue;
                 foreach (var cell in p.Map.PeerTargets)
                 {
                     if (!targets._residuals.TryGetValue(cell.Key, out var list))
-                        targets._residuals[cell.Key] = list = new List<(MapKey, double)>();
-                    list.Add((p.Evidence.Map, p.Accuracy - cell.Value.Ease));
+                        targets._residuals[cell.Key] = list = new List<(MapKey, double, bool)>();
+                    list.Add((p.Evidence.Map, p.Accuracy - cell.Value.Ease, p.Evidence.TimeUtc >= since));
                 }
             }
             return targets;
@@ -75,12 +86,17 @@ namespace SkillProgression.Core.Progression
         /// <summary>The player's level in a cell over all their maps there; null under the minimum map count.</summary>
         public double? Level(string cell) => Level(cell, default);
 
-        /// <summary>The player's level in a cell without <paramref name="exclude"/>; null under the minimum map count.</summary>
+        /// <summary>
+        /// The player's level in a cell without <paramref name="exclude"/>: over their recent PBs (D-065), else over all;
+        /// null under the minimum map count.
+        /// </summary>
         public double? Level(string cell, MapKey exclude)
         {
             if (!_residuals.TryGetValue(cell, out var list)) return null;
-            var values = list.Where(x => !x.map.Equals(exclude)).Select(x => x.residual).ToList();
-            return values.Count >= _minMaps ? Median(values) : (double?)null;
+            var all = list.Where(x => !x.map.Equals(exclude)).ToList();
+            var recent = all.Where(x => x.recent).Select(x => x.residual).ToList();
+            if (recent.Count >= _minMaps) return Median(recent);
+            return all.Count >= _minMaps ? Median(all.Select(x => x.residual).ToList()) : (double?)null;
         }
 
         /// <summary>

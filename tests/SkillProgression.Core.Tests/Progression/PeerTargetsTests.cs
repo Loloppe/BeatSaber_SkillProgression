@@ -60,6 +60,25 @@ public class PeerTargetsTests
     }
 
     [Fact]
+    public void Level_comes_from_the_last_twelve_months_when_there_are_enough_maps_there()
+    {
+        var maps = Enumerable.Range(0, 7).Select(_ => PeerMap(0.95)).ToList();
+        var (model, catalog) = Model(maps);
+        var now = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);
+        RatedPlay At(MapEntry m, double acc, DateTime time) =>
+            catalog.Rate(new SkillProgression.Core.Plays.PlayEvidence(Key(m), acc, null, time, SkillProgression.Core.Plays.EvidenceSource.BeatLeader))!;
+        // Four old unimproved PBs (-0.01) and three recent ones (+0.006).
+        var best = maps.Take(4).Select(m => At(m, 0.94, now.AddMonths(-20)))
+            .Concat(maps.Skip(4).Select(m => At(m, 0.956, now.AddDays(-30 * (maps.IndexOf(m) - 3))))).ToList();
+
+        Assert.Equal(0.006, PeerTargets.For(best, model).Level("Speed")!.Value, 9);           // 3 recent maps >= minimum 3
+        Assert.Equal(-0.01, PeerTargets.For(best, model, window: null).Level("Speed")!.Value, 9); // every PB (the fit's rule)
+
+        var (strict, _) = Model(maps, minPlayerMaps: 5);                                        // too few recent maps
+        Assert.Equal(-0.01, PeerTargets.For(best, strict).Level("Speed")!.Value, 9);           // falls back to every PB
+    }
+
+    [Fact]
     public void A_band_needs_enough_of_the_players_maps_else_the_style_level_is_used()
     {
         var band = Curve(0.90, (-0.01, 0.89), (0.01, 0.91));

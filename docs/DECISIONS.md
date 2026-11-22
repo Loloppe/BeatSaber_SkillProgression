@@ -629,6 +629,21 @@ Format: ID — date — decision — rationale. Open questions listed below with
   ranked (4 BL, 42 SS), all with peer targets and popularity, 46 more curated, 10 curated-only maps dropped (no longer
   curated); anchors 11/11, check-peers OK. New maps' popularity is low (median 15 vs 150 for older BL maps: few
   scores yet), so they come after popular maps in "clear harder" lists; counts grow with later updates.
+- **D-065 — 2026-11-22 — Peer level from the player's last 12 months (user question on stale PBs; variant C).**
+  Question: PBs a player never improved after climbing are tied to their current level in the D-058 fit — a bias?
+  **Measured** (5.96M comparable PBs; data/explore/15_score_age, local): residual (acc − ease − level) falls with the
+  score's age before the player's latest score, e.g. Speed +0.34 (< 3 months) → −0.23 (24+ months), Extreme +0.55 →
+  −0.33, Accuracy +0.12 → −0.08, AccSaber tracks ±0.05; > half of all PBs are > 1 year old. **Held-out test**
+  (data/explore/16_recency_test, local): history = PBs before 2026-08-01, test = the 432,267 PBs set after, same set
+  for every variant, prediction ease + level (additive): A today mean |err| 2.708 / bias +1.03 / 68% at or above /
+  1.9% above the map's best; B ease and level on each player's last 12 months 2.595 / +0.77 / 64% / 2.4%; **C ease on
+  all PBs, player level on their last 12 months 2.578 / +0.71 / 64% / 1.9%** (best on every style and track); D 24
+  months 2.665 / +0.95 / 67% / 2.0%. So the bias is mostly the player's level (stale PBs understate improving
+  players), not map ease; the remaining +0.7 is inherent (new PBs are moments players beat their level).
+  **Decision (user, option C with fallback):** Core `PeerTargets` takes the player's level per cell from their
+  comparable PBs in the 12 months before their latest score, falling back to all PBs when a cell has fewer than the
+  minimum maps there; model, population fit and map curves unchanged; CLI check-peers compares all-PB levels (the
+  fit's rule, `window: null`). Rejected: B (more targets above the map's best), D, no fallback, keep today's rule.
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are
