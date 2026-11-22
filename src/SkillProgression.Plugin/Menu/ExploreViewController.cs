@@ -28,6 +28,8 @@ internal class ExploreViewController : ViewController
     [Inject] private readonly MapDownloader _downloader = null!;
     [Inject] private readonly ToImproveTab _toImprove = null!;
     [Inject] private readonly ToSoloHandoff _handoff = null!;
+    private LiveRowData? _liveData;
+    private LiveRowData _live => _liveData ??= new LiveRowData(_service);
 
     /// <summary>Asks the flow to open the Solo menu on a level category with this level selected (D-049, D-057).</summary>
     public Action<SelectLevelCategoryViewController.LevelCategory, BeatmapLevelPack, BeatmapLevel, BeatmapKey>? SoloRequested { get; set; }
@@ -88,7 +90,8 @@ internal class ExploreViewController : ViewController
             _items = items;
             _view.Counts.Value = Format.ExploreCounts(counts, _view.Offset.Value, _view.Mode.Value);
             _view.Range.Value = Format.ExploreRange(_view.Style.Value, result);
-            _view.Rows.Value = items.Select(i => Format.ExploreRow(_view.Style.Value, i, MapDownloader.IsDownloaded(i.Map.Hash))).ToList();
+            _view.Rows.Value = Rows(items);
+            _live.Load(items.Select(i => i.Map), () => RefreshRows(keepDownloading: true));
             _view.Status.Value = items.Count == 0
                 ? (_view.Mode.Value == ExploreMode.Improve ? "No scores to improve at this difficulty - try another one." : "No new maps at this difficulty - try another one.")
                 : "";
@@ -151,7 +154,7 @@ internal class ExploreViewController : ViewController
     }
 
     /// <param name="toSolo">"To Solo" (D-057): hand the map to the Solo menu instead of starting it.</param>
-    private async void Play(ExploreRow row, bool toSolo)
+    private async void Play(MapRow row, bool toSolo)
     {
         if (_view == null) return;
         var item = _items.FirstOrDefault(i => i.Map.Equals(row.Map));
@@ -161,7 +164,7 @@ internal class ExploreViewController : ViewController
             _view.Busy.Value = true;
             if (!MapDownloader.IsDownloaded(row.Map.Hash))
             {
-                _view.Status.Value = $"Downloading {row.Title}";
+                _view.Status.Value = $"Downloading {row.Name}";
                 _view.Working.Value = true;
                 _view.Rows.Value = _view.Rows.Value.Select(r => r.Map.Equals(row.Map) ? r with { PlayText = "Downloading" } : r).ToList();
                 try { await _downloader.DownloadAsync(row.Map.Hash); }
@@ -213,9 +216,18 @@ internal class ExploreViewController : ViewController
     }
 
     /// <summary>Rebuilds the rows, resetting a "Downloading" button and showing newly downloaded maps.</summary>
-    private void RefreshRows()
+    /// <param name="keepDownloading">Live data arrived (D-060): keep a running download's button.</param>
+    private void RefreshRows(bool keepDownloading = false)
     {
         if (_view == null) return;
-        _view.Rows.Value = _items.Select(i => Format.ExploreRow(_view.Style.Value, i, MapDownloader.IsDownloaded(i.Map.Hash))).ToList();
+        var downloading = !keepDownloading ? new List<MapKey>() : _view.Rows.Value.Where(r => r.PlayText == "Downloading").Select(r => r.Map).ToList();
+        _view.Rows.Value = Rows(_items).Select(r => downloading.Contains(r.Map) ? r with { PlayText = "Downloading" } : r).ToList();
+    }
+
+    private List<MapRow> Rows(IReadOnlyList<ExploreItem> items)
+    {
+        var pool = MapPools.Effective(_view!.Pool.Value, _view.Style.Value);
+        return items.Select(i => Format.ExploreRow(_view.Style.Value, _view.Mode.Value, i, MapDownloader.IsDownloaded(i.Map.Hash),
+            _live.Context(i.Map, pool))).ToList();
     }
 }

@@ -15,8 +15,6 @@ using Label = Reactive.BeatSaber.Components.Label;
 
 namespace SkillProgression.Plugin.UI;
 
-internal sealed record ExploreRow(MapKey Map, string Title, string Detail, string PlayText);
-
 /// <summary>
 /// Explore side feature (user request 2026-11-10): fresh lists of maps to improve or to discover for a style, with an
 /// easier/harder slider and a personal expected accuracy. Presentation only.
@@ -25,6 +23,7 @@ internal class ExploreView : ReactiveComponent
 {
     private static readonly Color Dim = new(0.72f, 0.72f, 0.72f);
     private static readonly Color Accent = new(0.6f, 0.85f, 1f);
+    private readonly MapCardOverlay _card = new();
 
     private static readonly Dictionary<ExploreMode, BsSegmentedControlItem> ModeItems = new()
     {
@@ -51,7 +50,7 @@ internal class ExploreView : ReactiveComponent
     public State<string> Style { get; } = new(Destinations.Midspeed);
     public State<MapPool> Pool { get; } = new(MapPool.AnyRanked);
     public State<int> Offset { get; } = new(0);
-    public State<IReadOnlyList<ExploreRow>> Rows { get; } = new(Array.Empty<ExploreRow>());
+    public State<IReadOnlyList<MapRow>> Rows { get; } = new(Array.Empty<MapRow>());
     public State<string> Status { get; } = new("");
     /// <summary>Candidates per slider position (D-032 B) and the range actually used (D-032 A).</summary>
     public State<string> Counts { get; } = new("");
@@ -64,9 +63,9 @@ internal class ExploreView : ReactiveComponent
     public Action? OnNewList { get; set; }
     /// <summary>Fill the Solo menu's tab with this list (Improve or Never played) and open it (D-049).</summary>
     public Action? OnOpenInSolo { get; set; }
-    public Action<ExploreRow>? OnPlay { get; set; }
+    public Action<MapRow>? OnPlay { get; set; }
     /// <summary>"To Solo" (D-057): play the row's map from the game's Solo menu.</summary>
-    public Action<ExploreRow>? OnToSolo { get; set; }
+    public Action<MapRow>? OnToSolo { get; set; }
 
     protected override GameObject Construct()
     {
@@ -127,7 +126,7 @@ internal class ExploreView : ReactiveComponent
                 },
                 new Label { sText = Counts, FontSize = 2.6f, Color = Dim, RichText = true },
                 new Label { sText = Range, FontSize = 2.8f, Color = Accent },
-                new Repeater<ExploreRow, Layout>
+                new Repeater<MapRow, Layout>
                 {
                     FlexController = { FlexDirection = FlexDirection.Column, AlignItems = Align.Center, Gap = 0.8f.pt },
                     SelectionMode = SelectionMode.None,
@@ -135,21 +134,10 @@ internal class ExploreView : ReactiveComponent
                     ConstructCell = cell => new Layout
                     {
                         FlexController = { AlignItems = Align.Center, JustifyContent = Justify.Center, Gap = 2.pt },
-                        FlexItem = { Size = new() { y = 6.5f.pt } },
+                        FlexItem = { Size = new() { y = MapRowCell.Height.pt } },
                         Children =
                         {
-                            new Layout
-                            {
-                                FlexItem = { Size = new() { x = 72.pt, y = 6.5f.pt } },
-                                FlexController = { FlexDirection = FlexDirection.Column, JustifyContent = Justify.Center, AlignItems = Align.FlexStart, Gap = 0.3f.pt },
-                                Children =
-                                {
-                                    new Label { sText = cell.Map(c => c.Item.Title), FontSize = 3f, Alignment = TextAlignmentOptions.Left,
-                                                FlexItem = { Size = new() { x = 72.pt, y = 3.2f.pt } } },
-                                    new Label { sText = cell.Map(c => c.Item.Detail), FontSize = 2.4f, Color = Dim, Alignment = TextAlignmentOptions.Left, RichText = true,
-                                                FlexItem = { Size = new() { x = 72.pt, y = 2.6f.pt } } },
-                                }
-                            },
+                            MapRowCell.Build(cell, 74f, _card),
                             new BsPrimaryTextButton { sText = cell.Map(c => c.Item.PlayText), FlexItem = { Size = new() { x = 20.pt, y = 5.5f.pt } },
                                                       sInteractable = Busy.Map(b => !b), OnClick = () => OnPlay?.Invoke(cell.Item) },
                             new BsTextButton { Text = "To Solo", FlexItem = { Size = new() { x = 16.pt, y = 5.5f.pt } },
@@ -157,6 +145,7 @@ internal class ExploreView : ReactiveComponent
                         }
                     }
                 },
+                _card,
                 new Layout
                 {
                     FlexController = { AlignItems = Align.Center, Gap = 1.pt },

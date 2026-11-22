@@ -35,7 +35,7 @@ Fresh start (D-010) = evidence filter (ignore/decay before a date) + calibration
 - `paths[]`: per destination: axis, relevance rule id, prior (push share), `waypoints[]` (path-pp range, D, A, acc,
   typical equivalent rank).
 - `maps[]`: per BL-ranked difficulty: MapKey, ratings per speed modifier (none/SS/FS/SF: stars, pass, acc, tech,
-  predicted acc), name + mapper, map type, duration, NJS (D-056, 0 = unknown), pool flags (BL/SS/AccSaber, D-023), **pp lookup curve per speed modifier**,
+  predicted acc), name + mapper, map type, duration, NJS (D-056) and NPS (D-059; 0 = unknown), pool flags (BL/SS/AccSaber, D-023), **pp lookup curve per speed modifier**,
   peer popularity per (path, waypoint), `Curated` + `BeatSaverScore` (D-045), `PeerTargets` by cell ("Style" and
   "Style|band": ease + accuracy at ~16 population levels, D-058; top-level `PeerTargets` lists the cells). Also curated maps ranked nowhere
   (ratings only, empty pp curves): Explore's Curated pool only — the progression engine never sees them.
@@ -48,3 +48,9 @@ the pipeline exports a **per-map, per-speed-modifier acc→pp lookup curve** (fi
 formula/PBs), and Core interpolates. Pros: exact match with the model's space, no formula port, the formula can
 change upstream without code changes (new model.json). Cons: bigger file; unranked maps have no curve (only an issue
 after D-023, solvable with a ratings-based estimate). This pp is internal only; the platform panel shows live BL pp.
+
+### Displayed pp / AP (D-060)
+Map rows and hover cards show each platform's **live** value, never the model's pp space: Data `LiveMapClient` fetches
+per on-screen map BeatLeader `/leaderboards/hash` + `/pp/curve`, ScoreSaber stars, AccSaber complexity and both
+platforms' curves (disk cache, 1 day); Core `Scoring/LiveScoring` turns them into values (pure, tested), picks the
+row's platform from the pool and computes base JD; the plugin's `LiveRowData` fills rows in as data arrives.

@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HMUI;
 using Reactive;
+using SkillProgression.Core.Maps;
+using SkillProgression.Core.Model;
 using SkillProgression.Core.Plays;
 using SkillProgression.Core.Progression;
 using SkillProgression.Data.State;
@@ -26,6 +29,8 @@ internal class TrainingViewController : ViewController
     [InjectOptional] private readonly IPlatformUserModel? _platformUserModel = null;
     [Inject] private readonly PlatformsViewController _platforms = null!;
     [Inject] private readonly ToSoloHandoff _handoff = null!;
+    private LiveRowData? _liveData;
+    private LiveRowData _live => _liveData ??= new LiveRowData(_service);
 
     /// <summary>Asks the flow to open the Solo menu with this level selected ("To Solo", D-057).</summary>
     public Action<SelectLevelCategoryViewController.LevelCategory, BeatmapLevelPack, BeatmapLevel, BeatmapKey>? SoloRequested { get; set; }
@@ -165,7 +170,8 @@ internal class TrainingViewController : ViewController
             _view.Progress.Value = (float)(s.Focus?.ProgressToNext ?? 0);
             _view.Steps.Value = Format.Steps(s.FocusPath, s.Focus?.State, s.Steps);
         }
-        _view.NextUp.Value = s.NextUp.Select(n => Format.Row(s.FocusPath, n, MapDownloader.IsDownloaded(n.Recommendation.Map.Hash))).ToList();
+        _view.NextUp.Value = Rows(s);
+        _live.Load(s.NextUp.Select(n => n.Recommendation.Map), () => RefreshRows(keepDownloading: true));
         if (s.NextUp.Count == 0)
             _view.Status.Value = "No maps to recommend for this style right now.";
     }
@@ -223,7 +229,7 @@ internal class TrainingViewController : ViewController
         catch (Exception e) { Plugin.Log.Error(e); }
     }
 
-    private async void Skip(NextUpRow row)
+    private async void Skip(MapRow row)
     {
         _service.Skip(row.Map);
         try { await RefreshAsync(sync: false); }
@@ -231,7 +237,7 @@ internal class TrainingViewController : ViewController
     }
 
     /// <param name="toSolo">"To Solo" (D-057): hand the map to the Solo menu instead of starting it.</param>
-    private async void Play(NextUpRow row, bool toSolo)
+    private async void Play(MapRow row, bool toSolo)
     {
         if (_view == null || _snapshot == null) return;
         var item = _snapshot.NextUp.FirstOrDefault(n => n.Recommendation.Map.Equals(row.Map));
@@ -241,7 +247,7 @@ internal class TrainingViewController : ViewController
             _view.Busy.Value = true;
             if (!MapDownloader.IsDownloaded(row.Map.Hash))
             {
-                _view.Status.Value = $"Downloading {row.Title}";
+                _view.Status.Value = $"Downloading {row.Name}";
                 _view.Working.Value = true;
                 _view.NextUp.Value = _view.NextUp.Value.Select(r => r.Map.Equals(row.Map) ? r with { PlayText = "Downloading" } : r).ToList();
                 try { await _downloader.DownloadAsync(row.Map.Hash); }
@@ -279,10 +285,19 @@ internal class TrainingViewController : ViewController
     }
 
     /// <summary>Rebuilds the Next up rows, resetting a "Downloading" button and showing newly downloaded maps.</summary>
-    private void RefreshRows()
+    /// <param name="keepDownloading">Live data arrived (D-060): keep a running download's button.</param>
+    private void RefreshRows(bool keepDownloading = false)
     {
         if (_view == null || _snapshot is not { } s) return;
-        _view.NextUp.Value = s.NextUp.Select(n => Format.Row(s.FocusPath, n, MapDownloader.IsDownloaded(n.Recommendation.Map.Hash))).ToList();
+        var downloading = !keepDownloading ? new List<MapKey>() : _view.NextUp.Value.Where(r => r.PlayText == "Downloading").Select(r => r.Map).ToList();
+        _view.NextUp.Value = Rows(s).Select(r => downloading.Contains(r.Map) ? r with { PlayText = "Downloading" } : r).ToList();
+    }
+
+    private List<MapRow> Rows(TrainingSnapshot s)
+    {
+        var pool = MapPools.Effective(_service.State.MapPool, s.FocusPath);
+        return s.NextUp.Select(n => Format.Row(s.FocusPath, n, MapDownloader.IsDownloaded(n.Recommendation.Map.Hash),
+            _live.Context(n.Recommendation.Map, pool))).ToList();
     }
 
     private async void OnLevelFinished(NextUpItem item, PlayRecord? record, bool calibrating)

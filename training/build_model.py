@@ -136,7 +136,7 @@ def pool_maps(maps):
             "Hash": p["Hash"], "Characteristic": "Standard", "Difficulty": p["Difficulty"], "Name": p["Name"],
             "Mapper": p.get("Mapper", ""),
             "MapType": next((name for bit, name in TYPE_BITS if p["Type"] & bit), ""),
-            "Duration": round(p["Duration"], 2), "PeakEbpm": 0, "Njs": round(p.get("Njs", 0), 2),
+            "Duration": round(p["Duration"], 2), "PeakEbpm": 0, "Njs": round(p.get("Njs", 0), 2), "Nps": round(p.get("Nps", 0), 2),
             "RankedBeatLeader": False, "RankedScoreSaber": p["RankedScoreSaber"], "RankedAccSaber": p["RankedAccSaber"],
             "Ratings": p["Ratings"], "PpCurves": {mod: curve_for(r) for mod, r in p["Ratings"].items()}, "PeerPopularity": {},
         })
@@ -163,7 +163,7 @@ def curated_maps(maps):
             "Hash": c["Hash"], "Characteristic": "Standard", "Difficulty": c["Difficulty"], "Name": c["Name"],
             "Mapper": c.get("Mapper", ""),
             "MapType": next((name for bit, name in TYPE_BITS if c["Type"] & bit), ""),
-            "Duration": round(c["Duration"], 2), "PeakEbpm": 0, "Njs": round(c.get("Njs", 0), 2),
+            "Duration": round(c["Duration"], 2), "PeakEbpm": 0, "Njs": round(c.get("Njs", 0), 2), "Nps": round(c.get("Nps", 0), 2),
             "RankedBeatLeader": False, "RankedScoreSaber": False, "RankedAccSaber": False,
             "Curated": True, "BeatSaverScore": c["BeatSaverScore"],
             "Ratings": c["Ratings"], "PpCurves": {}, "PeerPopularity": {},
@@ -240,6 +240,8 @@ def main():
             "Mapper": r.Mapper or "",
             "MapType": r.MapType or "", "Duration": round(float(r.Duration or 0), 2), "PeakEbpm": round(float(r.PeakEbpm or 0), 1),
             "Njs": round(float(r.Njs or 0), 2) if pd.notna(r.Njs) else 0,
+            # BeatLeader's nps is notes / note span (matches its /leaderboards/hash nps on 96% of maps, D-059)
+            "Nps": round(float(r.NoteCount) / float(r.NoteSpan), 2) if pd.notna(r.NoteSpan) and r.NoteSpan > 0 else 0,
             "RankedBeatLeader": True,
             "RankedScoreSaber": bool(pool is not None and pool.SS), "RankedAccSaber": bool(pool is not None and pool.AS),
             "Ratings": ratings, "PpCurves": curves.get(r.Id, {}), "PeerPopularity": pop.get(r.Id, {}),

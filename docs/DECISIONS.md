@@ -484,6 +484,35 @@ Format: ID — date — decision — rationale. Open questions listed below with
   above their PBs. Claude choices to confirm: new-map targets are the plain peer target (no D-055 "+ one step");
   Explore Improve keeps its +0.2% minimum gain (short lists for top players); the 4 AccSaber maps with pass > 3 have no
   Accuracy curve (today's rule).
+- **D-059 — 2026-11-15 — NPS per map in the model, shown between the star rating and NJS (user: option 3 — NPS now,
+  SPS later).** Player request: notes per second next to the stars. Every model map gets `Nps` (0 = unknown): SS /
+  AccSaber and curated maps from BeatLeader's `/leaderboards/hash` `difficulty.nps` (already-cached responses,
+  re-extracted by fetch_pool_ratings.py / fetch_curated.py); BL-ranked maps from the population DB as
+  `NoteCount / NoteSpan` (no `Nps` column) — equals BeatLeader's nps within 0.01 on 1,705 of 1,779 difficulties present
+  in both, the rest differ slightly (NoteCount / Duration was off by up to 35%). Map rows: "Mapper - Song [Ex+]  9.47★
+  8.2 NPS  18 NJS" (each part omitted when unknown). **SPS (swings per second) considered instead (user question):**
+  better speed measure (stacks / sliders / windows inflate NPS) but no source has it (BeatLeader and BeatSaver
+  difficulties carry nps only; population DB has `PeakEbpm` for BL-ranked maps only, a peak, 0 elsewhere). It needs the
+  Analyzer's swing detection (portaBLerebalancer2 `SwingCreation.cs`, MIT) run offline over every model map's .dat
+  (BeatSaver zips, thousands of maps) → ROADMAP backlog. Not computed in the plugin: listed maps are usually not
+  downloaded.
+- **D-060 — 2026-11-22 — Map rows show each pool's own pp / AP; details on a hover card (user request).** Rows show
+  cover, song + mapper and the goal line "Reach this acc   |   98.70% (500pp)  →  99.20% (530pp)" ("Clear this map" for
+  push objectives and Explore's Never played; Explore's target = expected accuracy); everything else (difficulty, stars,
+  pass / acc / tech, NPS, NJS, base JD, BPM, every platform's value, objective / misses or expected / best) is on a
+  card shown while the row is hovered. **User choices:** pp on maps BeatLeader doesn't rank = the pool's own value
+  (option 4: ScoreSaber pp, AccSaber AP); the row's value follows the pool (BeatLeader / ScoreSaber / AccSaber pools
+  their own; Any ranked and Curated: BL pp if BL-ranked, else SS pp, else AP; the card lists all); the current value
+  is read off the same curve at the accuracy shown, no modifiers (not the platform's stored score value: consistent
+  arrow, works for local / Solo plays, no extra syncs; differs from the site for PBs with FS / SF etc.); hover popup
+  card (not a fixed panel or click-to-expand). **Source:** live platform data, not the model's pp curves (D-026, a
+  rebalanced pp space): BeatLeader `/pp/curve` (as PPCounter does since its PPv4 change — no formula port), ScoreSaber
+  stars × 42.117 × curve, AccSaber curve × (complexity + 18) × 61 — all verified against live scores 2026-11-22
+  (API_INTEGRATIONS.md). Fetched only for the rows on screen, cached a day (`UserData/SkillProgression/live-maps.json`);
+  card ratings are BeatLeader's live ones, the model's until loaded. Base JD as the game computes it (half jump 4 beats,
+  halved while > 18 m, + offset, ≥ 0.25 beats). **Claude defaults to confirm:** cover art on rows (BeatLeader's
+  `coverImage`), card placed under the hovered row, Explore uses the same rows. Card is a Reactive `Overlay`, not a
+  modal (modals add a full-screen raycast blocker that would steal the pointer from the row).
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are

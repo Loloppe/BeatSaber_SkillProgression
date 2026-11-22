@@ -137,6 +137,8 @@ namespace SkillProgression.Core.Model
         public double PeakEbpm { get; set; }
         /// <summary>Note jump speed from the map file (BeatLeader data); 0 = unknown (models built before D-056).</summary>
         public double Njs { get; set; }
+        /// <summary>Notes per second as BeatLeader shows it (notes / note span); 0 = unknown (models built before D-059).</summary>
+        public double Nps { get; set; }
         public bool RankedBeatLeader { get; set; }
         public bool RankedScoreSaber { get; set; }
         public bool RankedAccSaber { get; set; }

@@ -24,6 +24,8 @@ namespace SkillProgression.Core.Progression
         public double Stars { get; set; }
         /// <summary>Note jump speed, 0 = unknown (D-056).</summary>
         public double Njs { get; set; }
+        /// <summary>Notes per second, 0 = unknown (D-059).</summary>
+        public double Nps { get; set; }
         public double ExpectedAccuracy { get; set; }
         public double? CurrentAccuracy { get; set; }
     }
@@ -190,7 +192,7 @@ namespace SkillProgression.Core.Progression
                     .Where(p => !ctx.Peers.Covers(path) || PathAnalyzer.PeerTarget(ctx.Peers, path, p) != null)
                     .Select(p => new ExploreItem
                     {
-                        Map = p.Evidence.Map, Name = p.Map.Name, Mapper = p.Map.Mapper, AxisRating = PathRules.Axis(path, p.Ratings), Stars = p.Ratings.Stars, Njs = p.Map.Njs,
+                        Map = p.Evidence.Map, Name = p.Map.Name, Mapper = p.Map.Mapper, AxisRating = PathRules.Axis(path, p.Ratings), Stars = p.Ratings.Stars, Njs = p.Map.Njs, Nps = p.Map.Nps,
                         // D-058: players at their level; without peer data the estimate.
                         ExpectedAccuracy = PathAnalyzer.PeerTarget(ctx.Peers, path, p) ?? ctx.Estimator.Expected(p.Ratings, path),
                         CurrentAccuracy = p.Accuracy,
@@ -211,7 +213,7 @@ namespace SkillProgression.Core.Progression
                 .Where(x => !played.Contains(x.key))
                 .Select(x => (new ExploreItem
                 {
-                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = PathRules.Axis(path, x.r), Stars = x.r.Stars, Njs = x.map.Njs,
+                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = PathRules.Axis(path, x.r), Stars = x.r.Stars, Njs = x.map.Njs, Nps = x.map.Nps,
                     ExpectedAccuracy = ctx.Peers.Target(path, x.map) ?? ctx.Estimator.Expected(x.r, path),
                 }, curated ? x.map.BeatSaverScore : popularityKeys.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0)))
                 .ToList();

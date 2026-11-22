@@ -110,3 +110,15 @@ Outstanding / known gaps:
   (all ranked), level per style × 3 difficulty bands (tested on 97 players), Python fit, neutral modifiers count (OD,
   PM, DA, GN, BE) and no rule mixing in lists. Built + model rebuilt; anchors 11/11, check-peers OK, 124 + 25 tests.
   **Awaiting in-game test** (plugin + model copied to the 1.40.8 instance).
+- 2026-11-15: Player request: NPS in map rows → D-059, NPS between the star rating and NJS ("9.47★  8.2 NPS  18 NJS"),
+  from BeatLeader's nps (pool / curated caches) and NoteCount / NoteSpan for BL-ranked maps. User asked about SPS
+  instead: not available from any source → **backlog: SPS per map** via the Analyzer's swing detection run offline over
+  every model map's .dat (BeatSaver zips; decide then whether SPS replaces NPS or sits next to it, and how resets count).
+  Model rebuilt (33,448 maps, NPS on all but 4 curated-only ones; 9.5 MB gz); anchors 11/11, check-peers OK, 124 + 25
+  tests. **Awaiting in-game test** (plugin + model copied to the 1.40.8 instance; test zip in data/release updated,
+  previous one kept as .2026-11-14.zip).
+- 2026-11-22: Map rows redesigned (D-060): cover + song / mapper + "Reach this acc | 98.70% (500pp) → 99.20% (530pp)",
+  details (difficulty, all ratings, NPS, NJS, base JD, BPM, every platform's value) on a hover card; pp from live
+  BeatLeader `/pp/curve`, ScoreSaber and AccSaber curves (formulas verified on live scores). Training Next up and
+  Explore. Builds; 143 + 30 tests; live smoke test of the client OK; plugin copied to the 1.40.8 instance.
+  **Awaiting in-game test** (hover in VR / FPFC, card placement and width, "→" glyph in the game font, cover loading).

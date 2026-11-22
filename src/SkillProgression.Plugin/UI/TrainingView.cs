@@ -23,9 +23,6 @@ internal enum TrainingScreen
     Error,
 }
 
-/// <summary>One "Next up" row as displayed.</summary>
-internal sealed record NextUpRow(MapKey Map, string Title, string Detail, string PlayText);
-
 /// <summary>
 /// Training screen (D-029). Presentation only: state is pushed in by the view controller, actions go out through
 /// callbacks. Text avoids ':' — Beat Saber's font renders it as a dot (user feedback 2026-11-10).
@@ -34,7 +31,8 @@ internal class TrainingView : ReactiveComponent
 {
     private static readonly Color Dim = new(0.72f, 0.72f, 0.72f);
     private static readonly Color Accent = new(0.6f, 0.85f, 1f);
-    private const float TitleWidth = 72f;
+    private const float TitleWidth = 74f;
+    private readonly MapCardOverlay _card = new();
 
     private static readonly Dictionary<string, BsSegmentedControlItem> FocusItems = new()
     {
@@ -64,7 +62,7 @@ internal class TrainingView : ReactiveComponent
     public State<bool> HasProgress { get; } = new(false);
     public State<float> Progress { get; } = new(0f);
     public State<string> Steps { get; } = new("");
-    public State<IReadOnlyList<NextUpRow>> NextUp { get; } = new(Array.Empty<NextUpRow>());
+    public State<IReadOnlyList<MapRow>> NextUp { get; } = new(Array.Empty<MapRow>());
     public State<string> Status { get; } = new("");
     public State<bool> Busy { get; } = new(false);
     /// <summary>Spinner next to the status line (map download, sync).</summary>
@@ -76,10 +74,10 @@ internal class TrainingView : ReactiveComponent
     public Action<bool>? OnChooseStart { get; set; }           // true = import from BeatLeader, false = fresh
     public Action<string>? OnFocusChanged { get; set; }
     public Action<MapPool>? OnPoolChanged { get; set; }
-    public Action<NextUpRow>? OnPlay { get; set; }
-    public Action<NextUpRow>? OnSkip { get; set; }
+    public Action<MapRow>? OnPlay { get; set; }
+    public Action<MapRow>? OnSkip { get; set; }
     /// <summary>"To Solo" (D-057): play the row's map from the game's Solo menu.</summary>
-    public Action<NextUpRow>? OnToSolo { get; set; }
+    public Action<MapRow>? OnToSolo { get; set; }
     public Action? OnRequestStartChange { get; set; }
     public Action<bool>? OnConfirmStartChange { get; set; }     // true = confirmed
     public Action? OnOpenExplore { get; set; }
@@ -197,7 +195,7 @@ internal class TrainingView : ReactiveComponent
                             }
                         },
                         new Label { sText = Steps, FontSize = 3.3f, Color = Accent, Alignment = TextAlignmentOptions.Center },
-                        new Repeater<NextUpRow, Layout>
+                        new Repeater<MapRow, Layout>
                         {
                             FlexController = { FlexDirection = FlexDirection.Column, AlignItems = Align.Center, Gap = 0.6f.pt },
                             SelectionMode = SelectionMode.None,
@@ -205,21 +203,10 @@ internal class TrainingView : ReactiveComponent
                             ConstructCell = cell => new Layout
                             {
                                 FlexController = { AlignItems = Align.Center, JustifyContent = Justify.Center, Gap = 2.pt },
-                                FlexItem = { Size = new() { y = 6.4f.pt } },
+                                FlexItem = { Size = new() { y = MapRowCell.Height.pt } },
                                 Children =
                                 {
-                                    new Layout
-                                    {
-                                        FlexItem = { Size = new() { x = TitleWidth.pt, y = 6.4f.pt } },
-                                        FlexController = { FlexDirection = FlexDirection.Column, JustifyContent = Justify.Center, AlignItems = Align.FlexStart, Gap = 0.3f.pt },
-                                        Children =
-                                        {
-                                            new Label { sText = cell.Map(c => c.Item.Title), FontSize = 3f, Alignment = TextAlignmentOptions.Left,
-                                                        FlexItem = { Size = new() { x = TitleWidth.pt, y = 3.2f.pt } } },
-                                            new Label { sText = cell.Map(c => c.Item.Detail), FontSize = 2.4f, Color = Dim, Alignment = TextAlignmentOptions.Left, RichText = true,
-                                                        FlexItem = { Size = new() { x = TitleWidth.pt, y = 2.6f.pt } } },
-                                        }
-                                    },
+                                    MapRowCell.Build(cell, TitleWidth, _card),
                                     new BsPrimaryTextButton { sText = cell.Map(c => c.Item.PlayText), FlexItem = { Size = new() { x = 20.pt, y = 5.5f.pt } },
                                                               sInteractable = Busy.Map(b => !b), OnClick = () => OnPlay?.Invoke(cell.Item) },
                                     new BsTextButton { Text = "To Solo", FlexItem = { Size = new() { x = 16.pt, y = 5.5f.pt } },
@@ -229,6 +216,7 @@ internal class TrainingView : ReactiveComponent
                                 }
                             }
                         },
+                        _card,
                         new Layout
                         {
                             FlexController = { AlignItems = Align.Center, Gap = 1.pt },

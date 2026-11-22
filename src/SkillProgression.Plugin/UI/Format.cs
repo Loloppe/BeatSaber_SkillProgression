@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SkillProgression.Core.Maps;
+using SkillProgression.Core.Model;
 using SkillProgression.Core.Plays;
 using SkillProgression.Core.Profiles;
 using SkillProgression.Core.Progression;
+using SkillProgression.Core.Scoring;
 
 namespace SkillProgression.Plugin.UI;
 
@@ -11,6 +14,9 @@ namespace SkillProgression.Plugin.UI;
 /// Player-facing wording for Core results (kept out of the views so they stay presentation-only).
 /// No ':' anywhere — Beat Saber's font renders it as a dot (user feedback 2026-11-10).
 /// </summary>
+/// <summary>What a row needs besides the Core item (D-060): the model map, live platform data (null until loaded) and the pool.</summary>
+internal sealed record MapContext(MapEntry? Map, LiveMapInfo? Live, LiveCurves? Curves, MapPool Pool);
+
 internal static class Format
 {
     private const string Sep = "   |   ";
@@ -66,23 +72,75 @@ internal static class Format
             : state == null ? $"Next accuracy target - {s.Target - s.Current:+0.00%} average accuracy"
             : $"Next accuracy target - {Math.Min(1, state.Accuracy + s.Target - s.Current):P2} ({s.Target - s.Current:+0.00%})"));
 
-    public static ExploreRow ExploreRow(string path, ExploreItem i, bool downloaded)
+    /// <summary>Explore row (D-060): "Reach this acc" on Improve, "Clear this map" on Never played, toward the expected accuracy.</summary>
+    public static MapRow ExploreRow(string path, ExploreMode mode, ExploreItem i, bool downloaded, MapContext m)
     {
-        var best = i.CurrentAccuracy is double c ? $"<pos=46%>best {c:P1}" : "";
-        return new ExploreRow(i.Map, Title(i.Mapper, i.Name, i.Map.Difficulty, i.Stars, i.Njs),
-            $"{Axis(path)} {i.AxisRating:F2}<pos=20%>expected {i.ExpectedAccuracy:P1}{best}", downloaded ? "Play" : "Get & Play");
+        var line = Goal(mode == ExploreMode.Improve ? "Reach this acc" : "Clear this map", i.CurrentAccuracy ?? 0, i.ExpectedAccuracy, m);
+        // The style's rating is already in the card's rating pills (user, 2026-11-22: no duplicates).
+        var notes = $"Expected {i.ExpectedAccuracy:P2}" + (i.CurrentAccuracy is double c ? $"   best {c:P2}" : "");
+        return new MapRow(i.Map, i.Name, RowTitle(i.Mapper, i.Name), line, m.Live?.CoverUrl ?? "", downloaded ? "Play" : "Get & Play",
+            Card(i.Map, i.Mapper, i.Name, i.Stars, i.Nps, i.Njs, i.CurrentAccuracy ?? 0, i.ExpectedAccuracy, notes, m));
     }
 
-    /// <summary>Longest mapper / song name in a map title; longer ones end in "…" so difficulty and stars stay visible.</summary>
-    public const int MaxMapperLength = 16, MaxSongLength = 26;
-
     /// <summary>
-    /// Map title with mapper, difficulty, star rating and NJS (D-056, when known), e.g. "Mapper - Song [Ex+]  9.47★  18 NJS"
-    /// (no mapper: "Song …").
+    /// "Reach this acc | 98.70% (500pp) → 99.20% (530pp)" (user format, 2026-11-22). The value is the pool's own (BeatLeader
+    /// pp, ScoreSaber pp or AccSaber AP), read from the same curve at both accuracies, no modifiers; left out until loaded
+    /// and on maps ranked nowhere.
     /// </summary>
-    private static string Title(string mapper, string name, string difficulty, double stars, double njs) =>
-        $"{(string.IsNullOrWhiteSpace(mapper) ? "" : Clip(mapper, MaxMapperLength) + " - ")}{Clip(name, MaxSongLength)} [{Short(difficulty)}]  {stars:F2}★" +
-        (njs > 0 ? $"  {njs:0.#} NJS" : "");
+    private static string Goal(string label, double current, double target, MapContext m)
+    {
+        var platform = m.Map == null ? null : LiveScoring.ForPool(m.Pool, m.Map);
+        string Part(double acc) => platform is ScorePlatform p && LiveScoring.Value(p, m.Live, m.Curves, acc) is double v
+            ? $"{acc:P2} ({Points(p, v)})" : $"{acc:P2}";
+        return $"{label}   |   {Part(current)}  →  <color=#99D9FF>{Part(target)}</color>";
+    }
+
+    private static string Points(ScorePlatform p, double value) => p == ScorePlatform.AccSaber ? $"{value:N0} AP" : $"{value:N0}pp";
+
+    private static string PlatformName(ScorePlatform p) => p switch
+    {
+        ScorePlatform.BeatLeader => "BeatLeader", ScorePlatform.ScoreSaber => "ScoreSaber", _ => "AccSaber",
+    };
+
+    /// <summary>Hover card (D-060): every row detail plus base JD, all ratings and every platform's value.</summary>
+    private static MapCard Card(MapKey key, string mapper, string name, double modelStars, double nps, double modelNjs,
+        double current, double target, string notes, MapContext m)
+    {
+        var live = m.Live;
+        var model = m.Map != null && m.Map.Ratings.TryGetValue("", out var r) ? r : null;
+        // Live BeatLeader ratings when loaded (what BeatLeader shows), else the model's.
+        var stars = live?.Stars > 0 ? live.Stars : model?.Stars ?? modelStars;
+        var pass = live?.Pass > 0 ? live.Pass : model?.Pass ?? 0;
+        var acc = live?.Acc > 0 ? live.Acc : model?.Acc ?? 0;
+        var tech = live?.Tech > 0 ? live.Tech : model?.Tech ?? 0;
+        var njs = live?.Njs > 0 ? live.Njs : modelNjs;
+        var jd = live == null ? 0 : LiveScoring.BaseJumpDistance(live.Bpm, njs, live.NjsOffset);
+
+        var stats = string.Join("     ", new[]
+        {
+            nps > 0 ? $"{nps:0.0} NPS" : "",
+            njs > 0 ? $"{njs:0.#} NJS" : "",
+            jd > 0 ? $"{jd:0.0} JD" : "",
+            live?.Bpm > 0 ? $"{live.Bpm:0.#} BPM" : "",
+        }.Where(x => x.Length > 0));
+
+        var values = live == null ? "Loading pp" : string.Join("\n", Enum.GetValues(typeof(ScorePlatform)).Cast<ScorePlatform>()
+            .Select(p => (p, now: LiveScoring.Value(p, live, m.Curves, current), goal: LiveScoring.Value(p, live, m.Curves, target)))
+            .Where(x => x.now != null && x.goal != null)
+            .Select(x => $"{PlatformName(x.p)}<pos=32%>{Points(x.p, x.now!.Value)}  →  <color=#99D9FF>{Points(x.p, x.goal!.Value)}</color>"));
+        if (live != null && values.Length == 0) values = "No pp - not ranked on BeatLeader, ScoreSaber or AccSaber";
+
+        return new MapCard(Clip(name, 60), (string.IsNullOrWhiteSpace(mapper) ? "" : Clip(mapper, 40) + "   ·   ") + Long(key.Difficulty),
+            stars > 0 ? $"{stars:F2}★" : "", pass > 0 ? $"Pass {pass:F2}" : "", acc > 0 ? $"Acc {acc:F2}" : "", tech > 0 ? $"Tech {tech:F2}" : "",
+            stats, values, notes);
+    }
+
+    /// <summary>Longest mapper / song name in a row title; longer ones end in "…".</summary>
+    public const int MaxMapperLength = 22, MaxSongLength = 34;
+
+    /// <summary>Song name with the mapper dimmed after it, both clipped so the row keeps one line.</summary>
+    private static string RowTitle(string mapper, string name) =>
+        Clip(name, MaxSongLength) + (string.IsNullOrWhiteSpace(mapper) ? "" : $"   <color=#A6A6A6><size=85%>{Clip(mapper, MaxMapperLength)}</size></color>");
 
     private static string Clip(string text, int max)
     {
@@ -114,15 +172,16 @@ internal static class Format
         return $"{record.Accuracy:P2} - expected {item.ExpectedAccuracy:P1}{vsBest}";
     }
 
-    public static NextUpRow Row(string path, NextUpItem n, bool downloaded)
+    /// <summary>Next up row (D-060): "Clear this map" for push objectives, "Reach this acc" for accuracy ones.</summary>
+    public static MapRow Row(string path, NextUpItem n, bool downloaded, MapContext m)
     {
         var r = n.Recommendation;
-        // Columns at fixed positions (TMP <pos>) so ratings and targets line up from row to row.
-        var kind = n.Kind == ObjectiveKind.Push ? "Clear" : "Accuracy";
-        var now = r.CurrentAccuracy is double c ? $"<pos=54%>now {c:P2}" : "<pos=54%>now 0%";
-        var misses = n.Demoted ? "<pos=74%>moved down" : n.RecentMisses > 0 ? $"<pos=74%>{n.RecentMisses} miss" + (n.RecentMisses > 1 ? "es" : "") : "";
-        return new NextUpRow(r.Map, Title(r.Mapper, r.Name, r.Map.Difficulty, r.Stars, r.Njs),
-            $"{kind}<pos=14%>{Axis(path)} {r.AxisRating:F2}<pos=32%>target {n.TargetAccuracy:P2}{now}{misses}", downloaded ? "Play" : "Get & Play");
+        var line = Goal(n.Kind == ObjectiveKind.Push ? "Clear this map" : "Reach this acc", r.CurrentAccuracy ?? 0, n.TargetAccuracy, m);
+        var misses = n.Demoted ? "   moved down" : n.RecentMisses > 0 ? $"   {n.RecentMisses} miss" + (n.RecentMisses > 1 ? "es" : "") : "";
+        // The style's rating is already in the card's rating pills (user, 2026-11-22: no duplicates).
+        var notes = $"{(n.Kind == ObjectiveKind.Push ? "Clear" : "Accuracy")} objective{misses}";
+        return new MapRow(r.Map, r.Name, RowTitle(r.Mapper, r.Name), line, m.Live?.CoverUrl ?? "", downloaded ? "Play" : "Get & Play",
+            Card(r.Map, r.Mapper, r.Name, r.Stars, r.Nps, r.Njs, r.CurrentAccuracy ?? 0, n.TargetAccuracy, notes, m));
     }
 
     /// <summary>Progress of something not finished: rounded down, never "100%".</summary>
@@ -162,4 +221,6 @@ internal static class Format
     {
         "ExpertPlus" => "Ex+", "Expert" => "Ex", "Hard" => "H", "Normal" => "N", "Easy" => "E", _ => difficulty,
     };
+
+    private static string Long(string difficulty) => difficulty == "ExpertPlus" ? "Expert+" : difficulty;
 }

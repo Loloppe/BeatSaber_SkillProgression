@@ -24,6 +24,8 @@ namespace SkillProgression.Core.Progression
         public double Stars { get; set; }
         /// <summary>Note jump speed, 0 = unknown (D-056).</summary>
         public double Njs { get; set; }
+        /// <summary>Notes per second, 0 = unknown (D-059).</summary>
+        public double Nps { get; set; }
         /// <summary>
         /// Accuracy to aim for: what players at the player's level get on the map (D-058, <see cref="PeerTargets"/>).
         /// Without peer data: played maps (polish) predicted acc + next waypoint's typical residual; new maps (push, D-055)
@@ -145,7 +147,7 @@ namespace SkillProgression.Core.Progression
                 .Where(x => x.axis >= low && x.axis <= high)
                 .Select(x => new MapRecommendation
                 {
-                    Map = Key(x.map), Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars, Njs = x.map.Njs,
+                    Map = Key(x.map), Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars, Njs = x.map.Njs, Nps = x.map.Nps,
                     TargetAccuracy = peers.Target(path, x.map)
                                      ?? Math.Min(MaxTargetAccuracy, estimator.Expected(x.map.Ratings[""], path) + accuracyStep),
                     PeerPopularity = x.map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
@@ -183,7 +185,7 @@ namespace SkillProgression.Core.Progression
                     .Where(x => Math.Abs(x.axis - polishCentre) <= polishWindow)
                     .Select(x => new MapRecommendation
                     {
-                        Map = x.play.Evidence.Map, Name = x.play.Map.Name, Mapper = x.play.Map.Mapper, AxisRating = x.axis, Stars = x.play.Ratings.Stars, Njs = x.play.Map.Njs,
+                        Map = x.play.Evidence.Map, Name = x.play.Map.Name, Mapper = x.play.Map.Mapper, AxisRating = x.axis, Stars = x.play.Ratings.Stars, Njs = x.play.Map.Njs, Nps = x.play.Map.Nps,
                         TargetAccuracy = PeerTarget(peers, path, x.play) ?? x.play.Ratings.PredictedAcc + next.AccuracyResidual,
                         CurrentAccuracy = x.play.Accuracy,
                         PeerPopularity = x.play.Map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
@@ -242,7 +244,7 @@ namespace SkillProgression.Core.Progression
                 .Where(x => !playedSet.Contains(x.key) && x.axis <= easier && x.axis >= floor)
                 .Select(x => new MapRecommendation
                 {
-                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars, Njs = x.map.Njs,
+                    Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars, Njs = x.map.Njs, Nps = x.map.Nps,
                     TargetAccuracy = x.map.Ratings[""].PredictedAcc + first.AccuracyResidual,
                     PeerPopularity = popularity.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0),
                 })

@@ -10,6 +10,7 @@ using SkillProgression.Core.Model;
 using SkillProgression.Core.Plays;
 using SkillProgression.Core.Profiles;
 using SkillProgression.Core.Progression;
+using SkillProgression.Core.Scoring;
 using SkillProgression.Data.BeatLeader;
 using SkillProgression.Data.Model;
 using SkillProgression.Data.Platforms;
@@ -68,6 +69,8 @@ internal sealed class ProgressionService
     private IReadOnlyList<PlayEvidence> _unrankedScores = Array.Empty<PlayEvidence>();
     private readonly BeatLeaderClient _beatLeader;
     private readonly PlatformStatsClient _platforms;
+    /// <summary>Live per-map platform data for rows and cards (D-060).</summary>
+    private readonly LiveMapClient _live;
     private ProgressionEngine? _engine;
     private ModelFile? _model;
     private IReadOnlyList<PlayEvidence> _beatLeaderScores = Array.Empty<PlayEvidence>();
@@ -77,8 +80,9 @@ internal sealed class ProgressionService
 
     public UserState State { get; private set; }
 
-    public ProgressionService(string dataDir, PlayLogStore playLog, BeatLeaderClient beatLeader, PlatformStatsClient platforms)
+    public ProgressionService(string dataDir, PlayLogStore playLog, BeatLeaderClient beatLeader, PlatformStatsClient platforms, LiveMapClient live)
     {
+        _live = live;
         _dataDir = dataDir;
         _playLog = playLog;
         _beatLeader = beatLeader;
@@ -89,6 +93,24 @@ internal sealed class ProgressionService
         _unrankedCache = new ScoreCache(Path.Combine(dataDir, "beatleader-unranked-scores.json"), ScoreType.Unranked);
         _progress = new ProgressStore(Path.Combine(dataDir, "progress.json"));
         State = _stateStore.Load();
+    }
+
+    /// <summary>A model map (ranked or curated), for pool flags and ratings in rows (D-060).</summary>
+    public MapEntry? FindMap(MapKey key) => _engine != null && _engine.ExploreCatalog.TryGet(key, out var map) ? map : null;
+
+    /// <summary>ScoreSaber / AccSaber curves for row values (D-060); null when they could not be loaded.</summary>
+    public async Task<LiveCurves?> LiveCurvesAsync(CancellationToken ct = default)
+    {
+        try { return await Task.Run(() => _live.GetCurvesAsync(DateTime.UtcNow, ct), ct); }
+        catch (Exception e) when (!(e is OperationCanceledException)) { Plugin.Log.Warn($"Platform curves failed: {e.Message}"); return null; }
+    }
+
+    /// <summary>Live platform data of a model map (D-060); null when unknown to the model or nothing could be fetched.</summary>
+    public async Task<LiveMapInfo?> LiveMapAsync(MapKey key, CancellationToken ct = default)
+    {
+        if (FindMap(key) is not { } map) return null;
+        try { return await Task.Run(() => _live.GetAsync(key, map, DateTime.UtcNow, ct), ct); }
+        catch (Exception e) when (!(e is OperationCanceledException)) { Plugin.Log.Warn($"Live map data failed for {key}: {e.Message}"); return null; }
     }
 
     public string ModelPath => Path.Combine(_dataDir, "model.json.gz");
@@ -458,7 +480,7 @@ internal sealed class ProgressionService
                 TargetAccuracy = pick.TargetAccuracy,
                 Recommendation = new MapRecommendation
                 {
-                    Map = pick.Map, Name = map.Name, Mapper = map.Mapper, AxisRating = pick.Axis, Stars = map.Ratings[""].Stars, Njs = map.Njs,
+                    Map = pick.Map, Name = map.Name, Mapper = map.Mapper, AxisRating = pick.Axis, Stars = map.Ratings[""].Stars, Njs = map.Njs, Nps = map.Nps,
                     TargetAccuracy = pick.TargetAccuracy,
                 },
             },

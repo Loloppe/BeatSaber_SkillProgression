@@ -25,6 +25,7 @@ internal class AppInstaller : Installer
         Container.Bind<PlaySession>().AsSingle();
         Container.Bind<MapDownloader>().FromInstance(new MapDownloader(http)).AsSingle();
         Container.Bind<ProgressionService>().FromInstance(new ProgressionService(
-            dataDir, playLog, new BeatLeaderClient(http), new PlatformStatsClient(http))).AsSingle();
+            dataDir, playLog, new BeatLeaderClient(http), new PlatformStatsClient(http),
+            new LiveMapClient(http, Path.Combine(dataDir, "live-maps.json")))).AsSingle();
     }
 }

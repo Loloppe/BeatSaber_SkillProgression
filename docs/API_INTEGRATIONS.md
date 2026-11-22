@@ -40,13 +40,20 @@ median 426 scores per map, max 6,733 (D-058).
 **Ratings exist for unranked maps too** (user, verified 2026-11-10 anonymously via `/leaderboards/hash/{hash}`:
 an SS-only and an AccSaber-only map, status 0, returned stars/pass/acc/tech/predictedAcc). Map `type` may be 0
 (untagged) on unranked maps. No pp/rank for unranked maps.
-`/leaderboards/hash/{hash}` difficulties also carry `njs`, `noteJumpStartBeatOffset`, `nps`, `notes`, `duration` (used for NJS, D-056).
+`/leaderboards/hash/{hash}` difficulties also carry `njs`, `noteJumpStartBeatOffset`, `nps`, `notes`, `duration` (used for NJS, D-056, and NPS, D-059). No swing count / SPS field (checked 2026-11-15).
 **Requirements** (`difficulty.requirements`, bit flags, `beatleader-server` `Requirements` enum): 2 Chroma, 4 Noodles,
 8 MappingExtensions, 16 Cinema, 32 V3, 64 OptionalProperties, 128 VNJS, 256 Vivify, 512 V3Pepega, 1024 GroupLighting.
 Chroma/Noodles/ME/Cinema are copied from BeatSaver's per-diff `chroma`/`ne`/`me`/`cinema` flags (map *uses* the mod,
 required or suggested); Vivify comes from the diff's Info.dat `_requirements` (D-044).
 **BeatLeader does not rate modded maps** (checked 2026-11-11: 9/9 curated Noodle maps, incl. Vivify ones, and the
 SS-ranked Noodle map "mumei" have no stars/pass/acc/tech; predictedAcc may still be present).
+
+**pp curve (D-060, verified live 2026-11-22)**: `GET /pp/curve?leaderboardId={id}&modifiers={FS,GN,…}` →
+{leaderboardId, status, hasPp, modifiers, stars, points: [[acc, pp], …]} (~290 points, pp rounded to 2 decimals, ascending
+acc). Speed modifiers change stars and pp; GN / PM leave them unchanged. Unranked → `hasPp: false`, empty points. The
+leaderboard id comes from `/leaderboards/hash/{hash}` (`leaderboards[].id`; match difficultyName **and** modeName).
+PPCounter (Loloppe) uses exactly this since its PPv4 change (2026-10-27); its older local pass/acc/tech formula is obsolete.
+`/leaderboards/hash` also has `song.bpm` and `song.coverImage` (used for base JD and row covers).
 
 **Rate limits**: GET 50 / 10 s per IP; `/players` 10/10 s; `/maps` 8/s. 429 + Retry-After. No ETag.
 No published third-party ToS found → send descriptive User-Agent, throttle ~3 req/s.
@@ -62,7 +69,11 @@ re-version suffixes (`xx`) — **never parse ids**.
 Docs/spec: `https://scoresaber.com/api/openapi.json` (API v2). v1 still live (14 items/page).
 - `GET /api/v2/leaderboards?status=RANKED&limit=100&page=N` (~6201 → 63 pages). Item: map{hash, bsid},
   difficulty{difficulty 1/3/5/7/9, gameMode "SoloStandard", rawDifficulty}, realm{stars, rankedAt, …}.
-- `GET /api/v2/realms/1/pp-curve` — pp curve for local estimates.
+- `GET /api/v2/realms/1/pp-curve` — {"curve": [[acc, multiplier], …] descending, 1.0 at 95%} (+ positiveModifierCurve).
+  **pp = stars × 42.117 × curve(acc)** — verified 2026-11-22 on leaderboard 46809 (5.26★: 344.741 / 298.917 pp
+  reproduced within 0.02%; listed `maxPP` = stars × 42.11).
+- `GET /api/leaderboard/by-hash/{HASH}/info?difficulty={1|3|5|7|9}&gameMode=Solo{Characteristic}` → ranked, stars,
+  maxPP, coverImage; 404 when the difficulty doesn't exist (D-060).
 - Hash UPPERCASE. Rate limit 400/min (also 25/s, 100/10 s). No star/reweight history per map.
 
 ## AccSaber (Reloaded) — acc-focused pool
@@ -74,6 +85,9 @@ Base `https://api.accsaber.com/v1`, spec at `/v1/api-docs`. Old `/ranked-maps` �
   `/users/{id}/missing-maps`, `/users/{id}/categories/{cat}/ap-to-next`, `/users/{id}/ranking-history`.
 - History: `/maps/{mapId}/complexity-history`, `/categories/{code}/reweights`.
 - AP = curve(acc) × (complexity + 18) × 61; weighting logistic sigmoid (k 0.4, x1 15). Rate limit 400/60 s.
+  **Verified 2026-11-22** on 4 live scores (exact): curve points from `GET /v1/curves` → "AccSaber Score Curve"
+  (POINT_LOOKUP, 57 points {x, y}, `scale` 61, `shift` -18: AP = y × (complexity − shift) × scale); complexity from
+  `/v1/maps/difficulties/all` (difficulty codes EASY … EXPERT_PLUS).
 - Backend reports channel "BETA" (v0.3.6) — expect churn.
 
 ## Cross-platform map identity
