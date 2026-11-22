@@ -155,3 +155,10 @@ Outstanding / known gaps:
   dropdown; Achievements overlap fixed; small grey note under the step line ("Typical pass
   rating and average accuracy of your top 15 Midspeed plays"). 169 + 35 tests, anchors 11/11, check-peers OK, plugin copied.
   **Awaiting in-game test** (Achievements row layout with the dropdown, YOUR STYLE per pool, improve targets).
+  Test zip in data/release updated (Release build of the current working tree: AccSaber tracks, ScoreSaber styles,
+  D-063 review round; model of 2026-11-22 with 13 paths), previous one kept as .2026-11-22.zip.
+- 2026-11-22 (cont.): Incremental model update (D-064): `training/update_model.py` adds newly ranked BL / SS / AccSaber
+  and curated maps without retraining (ratings, KNN pp curves, peer curves from saved levels, popularity from
+  training-set players' scores since ranking — user choice, no attempts data needed). Full build re-run to save the
+  levels; first update: +74 maps (45 newly ranked), 10 dropped; anchors 11/11, check-peers OK; model copied to the
+  game (release zip not updated).

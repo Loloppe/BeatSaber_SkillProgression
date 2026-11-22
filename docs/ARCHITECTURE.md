@@ -36,6 +36,7 @@ Fresh start (D-010) = evidence filter (ignore/decay before a date) + calibration
   typical equivalent rank). Also the AccSaber tracks "True Acc" / "Standard Acc" / "Tech Acc" (D-061): path pp =
   category AP, D = complexity, waypoints at AccSaber category ranks, built cross-sectionally (`training/accsaber_tracks.py`).
 - `accSaber` (D-061): AccSaber score curve points, scale, shift and weight-curve parameters (AP and category AP in Core).
+- `updatedAt` (D-064): set by `training/update_model.py` when maps were added without a full build (Core ignores it).
 - `scoreSaber` (D-062): SS pp curve, factor 42.117, decay 0.965, ranked-realm modifier values. Paths also hold the
   ScoreSaber-measured styles "SS Accuracy" … "SS Extreme" (SS pp, milestones at SS global ranks, from sampled SS
   players; `training/scoresaber_styles.py`). The plugin analyses them on ScoreSaber scores + plugin plays only.

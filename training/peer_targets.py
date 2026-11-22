@@ -67,8 +67,9 @@ def population_scores(con, maps) -> pd.DataFrame:
     return s.rename(columns={"PlayerId": "player", "Accuracy": "acc"})
 
 
-def cells(maps, played) -> list[tuple[str, str, int, np.ndarray]]:
-    """[(cell id, destination, band or -1, map indices)] from the maps' no-modifier ratings."""
+def cells(maps, played, edges=None) -> list[tuple[str, str, int, np.ndarray]]:
+    """[(cell id, destination, band or -1, map indices)] from the maps' no-modifier ratings. `edges` (optional dict)
+    receives each style's / track's band edges on its axis (update_model.py places new maps with them)."""
     r = pd.DataFrame([{"i": i, "PassRating": m["Ratings"][""]["Pass"], "TechRating": m["Ratings"][""]["Tech"],
                        "Stars": m["Ratings"][""]["Stars"]} for i, m in enumerate(maps) if i in played])
     r["Complexity"] = [maps[i].get("AccSaberComplexity", 0) for i in r.i]
@@ -80,8 +81,10 @@ def cells(maps, played) -> list[tuple[str, str, int, np.ndarray]]:
         if sub.empty:
             continue
         out.append((path, path, -1, sub.i.to_numpy()))
-        edges = np.quantile(sub[axis], np.linspace(0, 1, BANDS + 1)[1:-1])
-        band = np.searchsorted(edges, sub[axis].to_numpy(), side="right")
+        e = np.quantile(sub[axis], np.linspace(0, 1, BANDS + 1)[1:-1])
+        if edges is not None:
+            edges[path] = [float(x) for x in e]
+        band = np.searchsorted(e, sub[axis].to_numpy(), side="right")
         for b in range(BANDS):
             out.append((f"{path}|{b}", path, b, sub.i.to_numpy()[band == b]))
     return out
@@ -116,8 +119,8 @@ def build(con, maps, report_players=()):
     scores = population_scores(con, maps)
     print(f"peer targets: {len(scores):,} comparable PBs, {scores.player.nunique():,} players, {scores['map'].nunique():,} maps")
     by_map = {m: g for m, g in scores.groupby("map")}
-    section, fitted = {"MinPlayerMaps": MIN_PLAYER_MAPS, "Cells": []}, {}
-    for cell_id, dest, band, idx in cells(maps, set(by_map)):
+    section, fitted, edges, levels = {"MinPlayerMaps": MIN_PLAYER_MAPS, "Cells": []}, {}, {}, []
+    for cell_id, dest, band, idx in cells(maps, set(by_map), edges):
         s = pd.concat([by_map[i] for i in idx]) if len(idx) else scores.iloc[:0]
         fit = fit_cell(s)
         if fit is None:
@@ -133,9 +136,26 @@ def build(con, maps, report_players=()):
                 "Ease": round(float(ease[m]), 5), "Levels": [round(x, 5) for x, _ in pts], "Values": [round(v, 5) for _, v in pts]}
             stored += 1
         section["Cells"].append({"Id": cell_id, "Destination": dest, "Band": band, "Players": int(level.size), "Maps": stored})
+        levels.append(pd.DataFrame({"cell": cell_id, "player": level.index.astype(str), "level": level.to_numpy()}))
         for p in report_players:
             if p in level.index:
                 fitted.setdefault(p, {})[cell_id] = round(float(level[p]), 6)
         print(f"  {cell_id:12} players {level.size:6,}  maps {stored:5,}")
     json.dump(fitted, open(os.path.join(out_dir("12_peer_scores"), "fitted_levels.json"), "w", encoding="utf-8"), indent=1)
+    # Every population player's fitted level per cell and the band edges (local only, D-007): update_model.py adds
+    # peer curves for maps ranked after this build without refitting.
+    pd.concat(levels, ignore_index=True).to_csv(os.path.join(out_dir("12_peer_scores"), "levels.csv.gz"), index=False)
+    json.dump(edges, open(os.path.join(out_dir("12_peer_scores"), "band_edges.json"), "w", encoding="utf-8"), indent=1)
     return section
+
+
+def map_curve(scores: pd.DataFrame, level: pd.Series, grid) -> dict | None:
+    """One map's peer curve in a cell from its comparable PBs (player, acc) and the cell's fitted levels — the same
+    per-map step as build() (ease = median of acc - level, values via band_value); None under MIN_BAND players."""
+    s = scores.assign(l=scores.player.map(level)).dropna(subset=["l"]).sort_values("l")
+    if len(s) < MIN_BAND:
+        return None
+    lv, ac = s.l.to_numpy(), s.acc.to_numpy()
+    pts = [(float(x), v) for x in grid if (v := band_value(lv, ac, x)) is not None]
+    return {"Ease": round(float(np.median(ac - lv)), 5), "Levels": [round(x, 5) for x, _ in pts],
+            "Values": [round(v, 5) for _, v in pts]}

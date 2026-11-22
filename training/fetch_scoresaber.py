@@ -52,7 +52,8 @@ def leaderboards(out):
         items += [{"Id": x["id"], "Hash": x["map"]["hash"].upper(), "Difficulty": x["difficulty"]["difficulty"],
                    "GameMode": x["difficulty"]["gameMode"], "Stars": x["realm"]["stars"],
                    "ModifierValues": json.loads(x["realm"].get("modifierValues") or "[]"),
-                   "PositiveModifiers": bool(x["realm"].get("positiveModifiers"))} for x in d["data"]]
+                   "PositiveModifiers": bool(x["realm"].get("positiveModifiers")),
+                   "RankedAt": x["realm"].get("rankedAt") or ""} for x in d["data"]]
         if page >= d["metadata"]["totalPages"]:
             break
         page += 1

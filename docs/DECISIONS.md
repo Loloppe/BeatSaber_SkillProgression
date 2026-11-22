@@ -611,6 +611,24 @@ Format: ID — date — decision — rationale. Open questions listed below with
   around …" needs no note).
   (7) Fixed: the style buttons overlapped the category dropdown and the Achievements / History tabs (wrapper without a
   size).
+- **D-064 — 2026-11-22 — Incremental model update without retraining (user request).** `training/update_model.py`
+  refreshes data/model from the platforms' current lists in minutes: BeatLeader `/leaderboards?type=ranked` (verified
+  2026-11-22: 100 per page, each with ratings incl. `modifiersRating` SS / FS / SF, NJS, NPS, type, duration,
+  `rankedTime`; 3,972 ranked, 3,898 Standard), ScoreSaber ranked list (now with `RankedAt`), AccSaber difficulties,
+  BeatSaver curated list. Existing maps: pool flags, SS stars, AccSaber category / complexity, curated flag / score
+  refreshed; BL ratings, pp curves and peer data kept as built (consistent with the fits); maps ranked nowhere and no
+  longer curated dropped. Maps that become ranked: BL ratings, acc→pp curves from the 5 closest curves
+  (`build_model.knn_curves`), peer curves from their BL scores (scoregraph, cached) against the levels of the last full
+  build (`peer_targets.map_curve`; the full build now saves every population player's level per cell and the band
+  edges locally: data/explore/12_peer_scores/levels.csv.gz, band_edges.json — never published, D-007). **Popularity
+  without attempts data (user, option 1 of 3):** per style, exploration-04 training-set players at each milestone (latest
+  snapshot) who set a score on the map after it was ranked (a score on a new map ≈ a new clear at their current
+  milestone); SS-style keys copied from the nearest-rank BL milestone; AccSaber track popularity left empty (tie-break
+  only). Rejected: zero until a full build; scaled cross-section. Unchanged until a full build: milestones, fitted
+  levels, style rules, AccSaber / SS ladders, existing maps' BL ratings (reweights). First run: 74 maps added, 45 newly
+  ranked (4 BL, 42 SS), all with peer targets and popularity, 46 more curated, 10 curated-only maps dropped (no longer
+  curated); anchors 11/11, check-peers OK. New maps' popularity is low (median 15 vs 150 for older BL maps: few
+  scores yet), so they come after popular maps in "clear harder" lists; counts grow with later updates.
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are

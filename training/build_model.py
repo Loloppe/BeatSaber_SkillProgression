@@ -106,14 +106,9 @@ def has_ratings(ratings):
     return r is not None and all(r[k] > 0 for k in ("Stars", "Pass", "Acc", "Tech"))
 
 
-def pool_maps(maps):
-    """D-041: ScoreSaber / AccSaber ranked maps that aren't BeatLeader-ranked, with BeatLeader's own ratings
-    (fetch_pool_ratings.py). They have no population scores, so each speed version gets the mean acc -> pp curve of
-    the KNN_CURVES BeatLeader curves with the closest (pass, acc, tech, predicted acc) ratings (D-026 lookup curves)."""
-    path = os.path.join(out_dir("08_pool_ratings"), "pool_ratings.json")
-    if not os.path.exists(path):
-        print("no pool ratings (run fetch_pool_ratings.py) - BeatLeader-ranked maps only")
-        return []
+def knn_curves(maps):
+    """curve_for(ratings): the mean acc -> pp curve of the KNN_CURVES curves of `maps` with the closest (pass, acc, tech,
+    predicted acc) ratings (D-026 lookup curves), for maps without population scores (pool_maps, update_model.py)."""
     feats, curves = [], []
     for m in maps:
         for mod, curve in m["PpCurves"].items():
@@ -128,6 +123,19 @@ def pool_maps(maps):
         x = np.array([r["Pass"], r["Acc"], r["Tech"], r["PredictedAcc"] * 100])
         nearest = np.argsort((((feats - x) / scale) ** 2).sum(axis=1))[:KNN_CURVES]
         return {"Acc": ACC_GRID, "Pp": [round(float(v), 2) for v in np.maximum.accumulate(curves[nearest].mean(axis=0))]}
+
+    return curve_for
+
+
+def pool_maps(maps):
+    """D-041: ScoreSaber / AccSaber ranked maps that aren't BeatLeader-ranked, with BeatLeader's own ratings
+    (fetch_pool_ratings.py). They have no population scores, so each speed version gets the mean acc -> pp curve of
+    the KNN_CURVES BeatLeader curves with the closest ratings (knn_curves)."""
+    path = os.path.join(out_dir("08_pool_ratings"), "pool_ratings.json")
+    if not os.path.exists(path):
+        print("no pool ratings (run fetch_pool_ratings.py) - BeatLeader-ranked maps only")
+        return []
+    curve_for = knn_curves(maps)
 
     known = {(m["Hash"], m["Difficulty"]) for m in maps}
     extra = []
