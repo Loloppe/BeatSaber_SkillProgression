@@ -147,5 +147,9 @@ public class CalibrationTests
 
         var next = Calibrator.Pick("Speed", 8.5, model, catalog, new HashSet<MapKey> { Key(maps[1]) }, T0)!;
         Assert.Equal(Key(maps[0]), next.Map);
+
+        // D-069: with a peer curve, what the typical player gets there (user 2026-11-22: 97.6% on an easy map was too high).
+        maps[1].PeerTargets["Speed"] = new PeerCurve { Ease = 0.92, Levels = { -0.05, 0, 0.08 }, Values = { 0.87, 0.92, 0.976 } };
+        Assert.Equal(0.92, Calibrator.Pick("Speed", 8.5, model, catalog, new HashSet<MapKey>(), T0)!.TargetAccuracy, 6);
     }
 }

@@ -66,14 +66,20 @@ namespace SkillProgression.Core.Progression
             }
 
             var playedMaps = best.Select(p => p.Evidence.Map).ToList();
+            PeerTargets? oldPeers = null; // D-069: starter targets are capped at the player's level from the full history
             foreach (var path in paths ?? _model.Paths.Select(p => p.Destination))
             {
                 var progress = report.Profile == null ? null : PathAnalyzer.Analyze(path, best, _model, _catalog, skipped);
                 if (progress != null) report.Paths[path] = progress;
                 else if (PathAnalyzer.Starter(path, _model, _catalog, playedMaps,
-                             startLevels != null && startLevels.TryGetValue(path, out var level) ? level : (double?)null, skipped) is { } starter) report.Starters[path] = starter;
+                             startLevels != null && startLevels.TryGetValue(path, out var level) ? level : (double?)null, skipped,
+                             oldPeers ??= since == null ? PeerTargets.For(best, _model) : OldPeers(evidence)) is { } starter) report.Starters[path] = starter;
             }
             return report;
         }
+
+        /// <summary>Peer levels from every PB, fresh start or not (D-069).</summary>
+        public PeerTargets OldPeers(IEnumerable<PlayEvidence> evidence) =>
+            PeerTargets.For(ProfileBuilder.BestPerMap(evidence.Select(_catalog.Rate).Where(r => r != null).Select(r => r!).ToList()), _model);
     }
 }

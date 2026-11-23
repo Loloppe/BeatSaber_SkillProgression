@@ -130,7 +130,10 @@ namespace SkillProgression.Core.Progression
         }
 
         /// <summary>Map closest to <paramref name="level"/> on the path, popular with players near that level.</summary>
-        public static CalibrationPick? Pick(string path, double level, ModelFile model, MapCatalog catalog, ISet<MapKey> exclude, DateTime nowUtc)
+        /// <param name="peers">The player's peer levels from their full history: the target is what the typical player
+        /// gets on the map, capped at the player's old level (D-069); predicted acc + waypoint residual without a curve.</param>
+        public static CalibrationPick? Pick(string path, double level, ModelFile model, MapCatalog catalog, ISet<MapKey> exclude, DateTime nowUtc,
+            PeerTargets? peers = null)
         {
             var pathModel = model.Paths.FirstOrDefault(p => p.Destination == path);
             if (pathModel == null || pathModel.Waypoints.Count == 0) return null;
@@ -149,7 +152,7 @@ namespace SkillProgression.Core.Progression
             return new CalibrationPick
             {
                 Map = best.key, Axis = best.axis, PickedUtc = nowUtc,
-                TargetAccuracy = best.r.PredictedAcc + waypoint.AccuracyResidual,
+                TargetAccuracy = (peers ?? PeerTargets.None).TypicalTarget(path, best.map) ?? best.r.PredictedAcc + waypoint.AccuracyResidual,
             };
         }
     }

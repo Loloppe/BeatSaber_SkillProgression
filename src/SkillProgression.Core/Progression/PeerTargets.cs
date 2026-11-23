@@ -78,6 +78,21 @@ namespace SkillProgression.Core.Progression
         }
 
         /// <summary>
+        /// D-069 (user): calibration and starter maps aim at what the typical player gets on the map (level 0, the
+        /// population's median), or at the player's own level when it is lower. Null when the map has no peer curve.
+        /// </summary>
+        public double? TypicalTarget(string path, MapEntry map)
+        {
+            path = ScoreSaberStyles.Style(path);
+            var key = new MapKey(map.Hash, map.Characteristic, map.Difficulty);
+            var band = map.PeerTargets.Keys.FirstOrDefault(k => k.StartsWith(path + "|", StringComparison.Ordinal));
+            if (band != null && Level(band, key) is double bandLevel) return At(map.PeerTargets[band], Math.Min(0, bandLevel));
+            if (map.PeerTargets.TryGetValue(path, out var style) && Level(path, key) is double styleLevel) return At(style, Math.Min(0, styleLevel));
+            if (band != null) return At(map.PeerTargets[band], 0);
+            return style != null ? At(style, 0) : (double?)null;
+        }
+
+        /// <summary>
         /// Whether the player has a peer level on the style: then lists of played maps only show maps with a peer target,
         /// so fallback targets (another rule, often much harder) never mix into the same ranking (D-058).
         /// </summary>

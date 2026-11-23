@@ -172,3 +172,10 @@ Outstanding / known gaps:
   end; Reset skips: confirmation, then skipped maps back in place; bottom row of 4 buttons fits).
   Test zip in data/release updated (Release build of the current working tree: D-064–D-067; model of 2026-11-22 11:53
   with the incremental update), previous one kept as .2026-11-22-1107.zip.
+- 2026-11-22 (cont.): Bug fix (D-068): fresh start, Midspeed, any ranked pool, one calibration map missed under target
+  → Next up empty (calibration ended at the pool's floor; starter maps only looked below it). Starter lists now fill
+  with the closest maps up to one spread above when the easier side runs out. 173 + 35 tests, anchors 11/11, plugin
+  copied (release zip not updated). **Awaiting in-game test** (same state: Next up shows maps around pass 3.0–4.3).
+- 2026-11-22 (cont.): Calibration / starter targets too high (97.58% on an easy map; D-069): now the map's peer curve
+  at the typical player's level, capped at the player's own. 174 + 35 tests, anchors 11/11, plugin copied.
+  **Awaiting in-game test** (Next up targets around 92% on the easiest Midspeed maps; new calibration picks likewise).

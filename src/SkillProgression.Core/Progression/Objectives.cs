@@ -254,29 +254,39 @@ namespace SkillProgression.Core.Progression
         /// </summary>
         /// <param name="startLevel">Fresh start (D-040): calibrated or cautious level from the old profile, instead of the
         /// first waypoint's difficulty.</param>
+        /// <param name="peers">The player's peer levels (full history): targets are what the typical player gets, capped
+        /// at the player's own level (D-069); predicted acc + first waypoint residual on maps without a curve.</param>
         public static Objective? Starter(string path, ModelFile model, MapCatalog catalog, IReadOnlyCollection<MapKey> played,
-            double? startLevel = null, ISet<MapKey>? skipped = null)
+            double? startLevel = null, ISet<MapKey>? skipped = null, PeerTargets? peers = null)
         {
+            peers ??= PeerTargets.None;
             var pathModel = model.Paths.FirstOrDefault(p => p.Destination == path);
             if (pathModel == null || pathModel.Waypoints.Count == 0) return null;
             var first = startLevel is double level
                 ? pathModel.Waypoints.OrderBy(w => Math.Abs(w.Difficulty - level)).First()
                 : pathModel.Waypoints.OrderBy(w => w.Index).First();
             var easier = startLevel ?? first.Difficulty;
-            var floor = easier - 2 * Positive(pathModel.DifficultySpread);
+            var spread = Positive(pathModel.DifficultySpread);
+            var floor = easier - 2 * spread;
             var popularity = new[] { $"{path}|{first.Index}", $"{path}|{first.Index + 1}" };
             var playedSet = new HashSet<MapKey>(played);
-            var maps = catalog.Recommendable(path)
+            var candidates = catalog.Recommendable(path)
                 .Where(m => m.Ratings.TryGetValue("", out var r) && PathRules.IsRecommendable(catalog, m, r, path, model.Thresholds))
                 .Select(m => (map: m, key: Key(m), axis: PathRules.Axis(path, m, m.Ratings[""])))
-                .Where(x => !playedSet.Contains(x.key) && x.axis <= easier && x.axis >= floor)
+                .Where(x => !playedSet.Contains(x.key) && x.axis >= floor && x.axis <= easier + spread)
                 .Select(x => new MapRecommendation
                 {
                     Map = x.key, Name = x.map.Name, Mapper = x.map.Mapper, AxisRating = x.axis, Stars = x.map.Ratings[""].Stars, Njs = x.map.Njs, Nps = x.map.Nps,
-                    TargetAccuracy = x.map.Ratings[""].PredictedAcc + first.AccuracyResidual,
+                    TargetAccuracy = peers.TypicalTarget(path, x.map) ?? x.map.Ratings[""].PredictedAcc + first.AccuracyResidual,
                     PeerPopularity = popularity.Sum(k => x.map.PeerPopularity.TryGetValue(k, out var n) ? n : 0),
                 })
-                .OrderByDescending(r => r.PeerPopularity).ThenBy(r => r.AxisRating);
+                .ToList();
+            IEnumerable<MapRecommendation> maps = candidates.Where(r => r.AxisRating <= easier)
+                .OrderByDescending(r => r.PeerPopularity).ThenBy(r => r.AxisRating).ToList();
+            // At the bottom of the pool the easier side runs out (a calibration miss on the easiest map left Next up empty,
+            // user 2026-11-22): the closest maps up to one spread above fill the list (D-027).
+            if (maps.Count(r => skipped == null || !skipped.Contains(r.Map)) < MapsPerObjective)
+                maps = maps.Concat(candidates.Where(r => r.AxisRating > easier).OrderBy(r => r.AxisRating));
             return new Objective
             {
                 Kind = ObjectiveKind.Push, Gap = 0, Priority = 0, CurrentValue = floor, TargetValue = easier, MapCentre = easier,

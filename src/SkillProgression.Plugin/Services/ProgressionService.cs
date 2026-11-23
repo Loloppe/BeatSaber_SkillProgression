@@ -533,7 +533,7 @@ internal sealed class ProgressionService
         {
             var exclude = State.SkippedKeys();
             foreach (var p in picks) exclude.Add(p.Map);
-            var pick = Calibrator.Pick(focus, status.Level, _model!, _engine.Catalog, exclude, DateTime.UtcNow);
+            var pick = Calibrator.Pick(focus, status.Level, _model!, _engine.Catalog, exclude, DateTime.UtcNow, _engine.OldPeers(evidence));
             if (pick == null) return (null, Calibrator.CautiousLevel(oldLevel));
             State.AddCalibrationPick(focus, pick);
             SaveState();

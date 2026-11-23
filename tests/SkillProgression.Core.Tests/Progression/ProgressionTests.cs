@@ -349,6 +349,21 @@ public class ProgressionTests
     }
 
     [Fact]
+    public void Starter_at_the_bottom_of_the_pool_fills_with_the_closest_harder_maps()
+    {
+        // User 2026-11-22: calibration missed on the easiest map, so the start level was that map's and Next up went empty.
+        var easiest = Map(9, 8.0, 4, "speed");
+        var above = Enumerable.Range(1, 3).Select(i => Map(9, 8.0 + i * 0.2, 4, "speed")).ToList();
+        var farAbove = Map(13, 9.5, 4, "speed"); // more than a spread above the start level
+        var model = SpeedModel(above.Append(easiest).Append(farAbove));
+        var catalog = new MapCatalog(model.Maps);
+
+        var starter = PathAnalyzer.Starter("Speed", model, catalog, new[] { Key(easiest) }, startLevel: 8.0)!;
+
+        Assert.Equal(above.Select(m => m.Hash), starter.Maps.Select(r => r.Map.Hash));
+    }
+
+    [Fact]
     public void Fresh_start_ignores_older_evidence()
     {
         var maps = Enumerable.Range(0, 30).Select(i => Map(11, 10, 4.5, "speed", predictedAcc: 0.96)).ToList();

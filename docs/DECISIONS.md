@@ -660,6 +660,24 @@ Format: ID — date — decision — rationale. Open questions listed below with
   change ("Bring back the N maps you skipped?"), then clears every skip (all styles and pools) and refreshes. With no
   skips it only says so on the status line. Calibration picks are untouched. Before this the only way was editing
   `UserData/SkillProgression/state.json` (`"Skipped": []`, game closed).
+- **D-068 — 2026-11-22 — Starter maps fill upward when the easier side runs out (bug fix, refines D-040 / D-027).**
+  Player report: fresh start, Midspeed, any ranked pool; one calibration map later Next up was empty. The first
+  calibration map is the pool's easiest (pass 3.00, Midspeed's floor is LowPass 3.0); missed under its target, calibration
+  ended at the bottom (estimate 3.00), and starter maps were only searched in [level − 2 spreads, level], where nothing
+  but the played map exists. Now, when fewer than 10 unskipped maps are left on the easier side, the closest maps up to
+  one difficulty spread above the start level fill the list (after the easier ones, nearest first). Lists that already
+  have 10 easier maps are unchanged. Claude fix within D-027 ("always a next recommendation"); the one-spread cap is a
+  Claude choice (keeps far harder maps out, as the existing starter test requires).
+- **D-069 — 2026-11-22 — Calibration and starter targets = the typical player on the map, capped at the player's
+  level (user, option "typical player, capped").** User: 97.58% on the first calibration map (Suzume Expert, pass 3.0)
+  is extremely high for someone starting over. Cause: predicted acc (98.58%, BL's AI ≈ a strong player) + the first
+  waypoint's residual (−1.0%, from rank-40k players' top plays, not first attempts). The map's peer curve (D-058) puts
+  the typical player at ~92% there; 97.58% is the top few percent. Now calibration picks and starter maps target the
+  peer curve at level 0 (the population median), or at the player's own peer level when it is lower — from the full
+  history, fresh start or not (band cell first, then style, as `Target`). The old rule stays only for maps without a
+  curve. Rejected: the player's old level (strict, a returning player who lost accuracy misses everywhere), old level
+  minus a margin (new knob), a fixed discount on the old rule (not grounded per map). Picks saved before the change
+  keep their stored target.
 
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are

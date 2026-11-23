@@ -79,6 +79,21 @@ public class PeerTargetsTests
     }
 
     [Fact]
+    public void Typical_target_is_the_typical_player_capped_at_a_lower_player_level()
+    {
+        // D-069: style curve 0.94 at -0.01, 0.95 at 0 (typical), 0.96 at +0.01.
+        var maps = Enumerable.Range(0, 4).Select(_ => PeerMap(0.95)).ToList();
+        var (model, catalog) = Model(maps);
+
+        Assert.Equal(0.95, PeerTargets.None.TypicalTarget("Speed", maps[3])!.Value, 9);       // no level: typical player
+        var strong = maps.Take(3).Select(m => catalog.Rate(Play(m, 0.958))!).ToList();        // level +0.008
+        Assert.Equal(0.95, PeerTargets.For(strong, model).TypicalTarget("Speed", maps[3])!.Value, 9);
+        var weak = maps.Take(3).Select(m => catalog.Rate(Play(m, 0.945))!).ToList();          // level -0.005
+        Assert.Equal(0.945, PeerTargets.For(weak, model).TypicalTarget("Speed", maps[3])!.Value, 9);
+        Assert.Null(PeerTargets.None.TypicalTarget("Speed", Map(10, 9.0, 4, "speed")));      // no curve
+    }
+
+    [Fact]
     public void A_band_needs_enough_of_the_players_maps_else_the_style_level_is_used()
     {
         var band = Curve(0.90, (-0.01, 0.89), (0.01, 0.91));
