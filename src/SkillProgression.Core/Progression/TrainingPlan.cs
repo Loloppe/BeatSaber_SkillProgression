@@ -98,8 +98,8 @@ namespace SkillProgression.Core.Progression
         }
 
         /// <summary>
-        /// Next up for the focus path: maps from its objectives in priority order, interleaved, without skipped maps;
-        /// maps with 3+ recent misses move to the end (D-030). Every map aims at its full target — improve rows too
+        /// Next up for the focus path: maps from its objectives in priority order, interleaved; maps with 3+ recent misses
+        /// move to the end (D-030), skipped maps after them (D-029: only there when the objectives ran out of others). Every map aims at its full target — improve rows too
         /// (user, 2026-11-22: the old +0.5% per-map step made them far easier than new maps' targets); the short-term
         /// steps stay on the header's step line (D-029).
         /// </summary>
@@ -123,7 +123,7 @@ namespace SkillProgression.Core.Progression
                 {
                     if (queues[i].Count == 0) continue;
                     var rec = queues[i].Dequeue();
-                    if (skipped.Contains(rec.Map) || !seen.Add(rec.Map)) continue;
+                    if (!seen.Add(rec.Map)) continue;
                     var objective = objectives[i];
                     var target = rec.TargetAccuracy;
                     candidates.Add(new NextUpItem
@@ -134,9 +134,11 @@ namespace SkillProgression.Core.Progression
                 }
             }
 
-            // Stable: keep priority order, demoted maps after the others.
-            result.AddRange(candidates.Where(c => !c.Demoted));
-            result.AddRange(candidates.Where(c => c.Demoted));
+            // Stable: keep priority order, demoted maps after the others, skipped maps last.
+            var fresh = candidates.Where(c => !skipped.Contains(c.Recommendation.Map)).ToList();
+            result.AddRange(fresh.Where(c => !c.Demoted));
+            result.AddRange(fresh.Where(c => c.Demoted));
+            result.AddRange(candidates.Where(c => skipped.Contains(c.Recommendation.Map)));
             return result.Take(count).ToList();
         }
 

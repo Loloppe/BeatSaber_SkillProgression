@@ -35,7 +35,7 @@ public class TrainingPlannerTests
     }
 
     [Fact]
-    public void Next_up_interleaves_objectives_in_priority_order_and_drops_skipped_maps()
+    public void Next_up_interleaves_objectives_in_priority_order_and_puts_skipped_maps_last()
     {
         var polish = new Objective { Kind = ObjectiveKind.Polish, Maps = { Rec("p1", 0.98, 0.96), Rec("p2", 0.98, 0.97) } };
         var push = new Objective { Kind = ObjectiveKind.Push, Maps = { Rec("s1", 0.95), Rec("s2", 0.95) } };
@@ -43,8 +43,19 @@ public class TrainingPlannerTests
 
         var next = TrainingPlanner.NextUp(Progress(polish, push), Array.Empty<PlayRecord>(), skipped);
 
-        Assert.Equal(new[] { "p1", "s1", "s2" }, next.Select(n => n.Recommendation.Name));
+        Assert.Equal(new[] { "p1", "s1", "s2", "p2" }, next.Select(n => n.Recommendation.Name));
         Assert.Equal(ObjectiveKind.Polish, next[0].Kind);
+    }
+
+    [Fact]
+    public void Skipping_every_map_never_empties_next_up()
+    {
+        var push = new Objective { Kind = ObjectiveKind.Push, Maps = { Rec("s1", 0.95), Rec("s2", 0.95) } };
+        var skipped = new HashSet<MapKey> { new("s1", "Standard", "ExpertPlus"), new("s2", "Standard", "ExpertPlus") };
+
+        var next = TrainingPlanner.NextUp(Progress(push), Array.Empty<PlayRecord>(), skipped);
+
+        Assert.Equal(new[] { "s1", "s2" }, next.Select(n => n.Recommendation.Name));
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using SkillProgression.Core.Maps;
 using SkillProgression.Core.Model;
 using SkillProgression.Core.Plays;
 using SkillProgression.Core.Profiles;
@@ -47,8 +48,9 @@ namespace SkillProgression.Core.Progression
         /// <param name="paths">Paths to analyse; null = every destination with a path model.</param>
         /// <param name="since">Fresh start (D-010): ignore evidence before this time.</param>
         /// <param name="startLevels">Fresh start (D-040): per-path level starter maps aim at (calibrated or cautious).</param>
+        /// <param name="skipped">Skipped maps (D-029): recommended only when nothing else is left.</param>
         public PlayerReport Analyze(IEnumerable<PlayEvidence> evidence, IEnumerable<string>? paths = null, DateTime? since = null,
-            IReadOnlyDictionary<string, double>? startLevels = null)
+            IReadOnlyDictionary<string, double>? startLevels = null, ISet<MapKey>? skipped = null)
         {
             var list = evidence.Where(e => since == null || e.TimeUtc >= since.Value).ToList();
             var rated = list.Select(_catalog.Rate).Where(r => r != null).Select(r => r!).ToList();
@@ -66,10 +68,10 @@ namespace SkillProgression.Core.Progression
             var playedMaps = best.Select(p => p.Evidence.Map).ToList();
             foreach (var path in paths ?? _model.Paths.Select(p => p.Destination))
             {
-                var progress = report.Profile == null ? null : PathAnalyzer.Analyze(path, best, _model, _catalog);
+                var progress = report.Profile == null ? null : PathAnalyzer.Analyze(path, best, _model, _catalog, skipped);
                 if (progress != null) report.Paths[path] = progress;
                 else if (PathAnalyzer.Starter(path, _model, _catalog, playedMaps,
-                             startLevels != null && startLevels.TryGetValue(path, out var level) ? level : (double?)null) is { } starter) report.Starters[path] = starter;
+                             startLevels != null && startLevels.TryGetValue(path, out var level) ? level : (double?)null, skipped) is { } starter) report.Starters[path] = starter;
             }
             return report;
         }

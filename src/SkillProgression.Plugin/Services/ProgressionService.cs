@@ -187,6 +187,15 @@ internal sealed class ProgressionService
         SaveState();
     }
 
+    public int SkippedCount => State.Skipped.Count;
+
+    /// <summary>Every skipped map is recommended normally again (D-067; the UI asks for confirmation first).</summary>
+    public void ResetSkips()
+    {
+        State.Skipped.Clear();
+        SaveState();
+    }
+
     /// <summary>Loads the model (once), syncs BeatLeader PBs when importing, then analyses. Network failures fall back to the cache.</summary>
     public async Task<TrainingSnapshot> RefreshAsync(string playerId, bool sync, IProgress<double>? progress = null,
         CancellationToken ct = default)
@@ -245,11 +254,12 @@ internal sealed class ProgressionService
         {
             var log = _playLog.ReadAll(out _);
             var evidence = Evidence(log);
+            var skipped = State.SkippedKeys();
             // AccSaber tracks too, whatever the pool: their milestones count as achievements (D-061).
-            var report = _engine!.Analyze(evidence, Destinations.All.Concat(AccSaberTracks.All), Since);
+            var report = _engine!.Analyze(evidence, Destinations.All.Concat(AccSaberTracks.All), Since, skipped: skipped);
             // ScoreSaber styles on ScoreSaber's own scores (D-062), whatever the pool, so their milestones accrue too.
             var ssEvidence = ScoreSaberEvidence(log);
-            var ssReport = _engine.Analyze(ssEvidence, ScoreSaberStyles.All, Since);
+            var ssReport = _engine.Analyze(ssEvidence, ScoreSaberStyles.All, Since, skipped: skipped);
             var ssMix = StyleMixCalculator.ComputeScoreSaber(ssEvidence.Where(e => Since == null || e.TimeUtc >= Since.Value)
                 .Select(_engine.Catalog.Rate).Where(r => r != null).Select(r => r!), _model!.Thresholds);
             foreach (var kv in ssReport.Paths) report.Paths[kv.Key] = kv.Value;
@@ -265,7 +275,7 @@ internal sealed class ProgressionService
             var focusEvidence = ScoreSaberStyles.IsSsPath(focus) ? ssEvidence : evidence;
             var (calibration, startLevel) = Calibrate(focus, report, log, focusEvidence);
             if (startLevel is double level && !report.Paths.ContainsKey(focus)
-                && _engine.Analyze(focusEvidence, new[] { focus }, Since, new Dictionary<string, double> { [focus] = level })
+                && _engine.Analyze(focusEvidence, new[] { focus }, Since, new Dictionary<string, double> { [focus] = level }, skipped)
                     .Starters.TryGetValue(focus, out var levelled))
                 report.Starters[focus] = levelled;
             report.Paths.TryGetValue(focus, out var path);
@@ -282,8 +292,8 @@ internal sealed class ProgressionService
                 Steps = calibration == null ? path?.Objectives.Select(o => TrainingPlanner.Step(o, steps)).ToList() ?? new List<ShortTermStep>() : new List<ShortTermStep>(),
                 NextUp = calibration != null ? CalibrationItems(calibration)
                     : path != null
-                    ? TrainingPlanner.NextUp(path, log, State.SkippedKeys())
-                    : TrainingPlanner.NextUpFromObjectives(starter != null ? new[] { starter } : Array.Empty<Objective>(), log, State.SkippedKeys()),
+                    ? TrainingPlanner.NextUp(path, log, skipped)
+                    : TrainingPlanner.NextUpFromObjectives(starter != null ? new[] { starter } : Array.Empty<Objective>(), log, skipped),
                 LastSyncUtc = _scoreCache.LastSyncUtc,
                 Offline = offline,
                 NewAchievements = newAchievements,

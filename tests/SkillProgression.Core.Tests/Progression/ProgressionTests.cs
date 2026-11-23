@@ -289,6 +289,27 @@ public class ProgressionTests
     }
 
     [Fact]
+    public void Skipped_maps_are_replaced_by_the_next_best_and_only_fill_in_when_nothing_else_is_left()
+    {
+        var played = Enumerable.Range(0, 10).Select(i => Map(10, 8.5, 4, "speed")).ToList();
+        var candidates = Enumerable.Range(0, 12).Select(i => Map(10, 9.0, 4, i % 2 == 0 ? "speed" : "midspeed")).ToList();
+        for (var i = 0; i < candidates.Count; i++) candidates[i].PeerPopularity["Speed|1"] = 100 - i;
+        var model = SpeedModel(played.Concat(candidates));
+        var catalog = new MapCatalog(model.Maps);
+        var best = played.Select(m => catalog.Rate(Play(m, 0.88))!).ToList();
+        Objective Push(ISet<SkillProgression.Core.Maps.MapKey> skipped) =>
+            PathAnalyzer.Analyze("Speed", best, model, catalog, skipped)!.Objectives.Single(o => o.Kind == ObjectiveKind.Push);
+
+        // The first ten skipped: the two left come first, then the best skipped ones fill the list.
+        var firstTen = Push(new HashSet<SkillProgression.Core.Maps.MapKey>()).Maps.Select(r => r.Map).ToList();
+        var push = Push(new HashSet<SkillProgression.Core.Maps.MapKey>(firstTen));
+
+        Assert.Equal(PathAnalyzer.MapsPerObjective, push.Maps.Count);
+        Assert.Equal(new[] { candidates[10].Hash, candidates[11].Hash }, push.Maps.Take(2).Select(r => r.Map.Hash));
+        Assert.All(push.Maps.Skip(2), r => Assert.Contains(r.Map, firstTen));
+    }
+
+    [Fact]
     public void Past_the_last_waypoint_there_is_still_a_next_step_with_objectives()
     {
         // D-027: even the best player gets something to work on.

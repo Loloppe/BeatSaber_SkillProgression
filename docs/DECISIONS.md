@@ -645,6 +645,22 @@ Format: ID — date — decision — rationale. Open questions listed below with
   minimum maps there; model, population fit and map curves unchanged; CLI check-peers compares all-PB levels (the
   fit's rule, `window: null`). Rejected: B (more targets above the map's best), D, no fallback, keep today's rule.
 
+- **D-066 — 2026-11-22 — Skipped maps are replaced, and come back last instead of vanishing (refines D-029; user,
+  option C).** Bug report: a player skipped every Accuracy map and Next up went empty. Cause: each objective kept its
+  10 best maps and skipped ones were dropped from that list afterwards, so every skip shrank it for good instead of
+  bringing in "a new one" (D-029). **Decision:** the skipped set reaches objective building (`ProgressionEngine.Analyze`
+  / `PathAnalyzer.Analyze` / `Starter`, optional `skipped`): each objective takes its 10 best non-skipped maps (same
+  diversity rule) and fills up with the best skipped ones only when there aren't enough others; Next up orders fresh
+  maps, then demoted ones (D-030), then skipped ones last. Next up never empties while an objective has any candidate.
+  Skips stay permanent and global (no un-skip / reset; not needed now that the list can't run out). Rejected: A (refill
+  only, can still empty), B (move to bottom only, skipped maps come back after ~20 skips).
+
+- **D-067 — 2026-11-22 — "Reset skips" button (user request).** Training's bottom row gets "Reset skips" (between
+  Start mode and Explore). It asks for confirmation on the Training confirmation screen, now shared with the start-mode
+  change ("Bring back the N maps you skipped?"), then clears every skip (all styles and pools) and refreshes. With no
+  skips it only says so on the status line. Calibration picks are untouched. Before this the only way was editing
+  `UserData/SkillProgression/state.json` (`"Skipped": []`, game closed).
+
 ## Domain knowledge from the user (authoritative)
 - **AccSaber** is purely accuracy, on easier maps — roughly 0–5★ BL equivalent. "True/Standard/Tech acc" are
   complexity bands of acc maps; "tech acc" ≈ the hardest acc maps, NOT BL-style tech. Beyond that, maps become

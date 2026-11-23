@@ -19,7 +19,8 @@ internal enum TrainingScreen
     Loading,
     ChooseStart,
     Training,
-    ConfirmStartChange,
+    /// <summary>Yes / no question (start mode change, reset skips) with <see cref="TrainingView.ConfirmText"/>.</summary>
+    Confirm,
     Error,
 }
 
@@ -89,7 +90,8 @@ internal class TrainingView : ReactiveComponent
     /// <summary>"To Solo" (D-057): play the row's map from the game's Solo menu.</summary>
     public Action<MapRow>? OnToSolo { get; set; }
     public Action? OnRequestStartChange { get; set; }
-    public Action<bool>? OnConfirmStartChange { get; set; }     // true = confirmed
+    public Action? OnRequestResetSkips { get; set; }
+    public Action<bool>? OnConfirm { get; set; }                // true = confirmed
     public Action? OnOpenExplore { get; set; }
     public Action? OnOpenAchievements { get; set; }
 
@@ -138,10 +140,10 @@ internal class TrainingView : ReactiveComponent
                     }
                 },
 
-                // Confirmation for changing the start mode later (D-029)
+                // Confirmation: changing the start mode later (D-029), resetting skips (D-067)
                 new Layout
                 {
-                    sEnabled = Screen.Map(s => s == TrainingScreen.ConfirmStartChange),
+                    sEnabled = Screen.Map(s => s == TrainingScreen.Confirm),
                     FlexItem = { FlexGrow = 1 },
                     FlexController = { FlexDirection = FlexDirection.Column, JustifyContent = Justify.Center, AlignItems = Align.Center, Gap = 2.5f.pt },
                     Children =
@@ -152,8 +154,8 @@ internal class TrainingView : ReactiveComponent
                             FlexController = { Gap = 3.pt },
                             Children =
                             {
-                                new BsPrimaryTextButton { Text = "Confirm", FlexItem = { Size = new() { x = 26.pt, y = 7.pt } }, OnClick = () => OnConfirmStartChange?.Invoke(true) },
-                                new BsTextButton { Text = "Cancel", FlexItem = { Size = new() { x = 26.pt, y = 7.pt } }, OnClick = () => OnConfirmStartChange?.Invoke(false) },
+                                new BsPrimaryTextButton { Text = "Confirm", FlexItem = { Size = new() { x = 26.pt, y = 7.pt } }, OnClick = () => OnConfirm?.Invoke(true) },
+                                new BsTextButton { Text = "Cancel", FlexItem = { Size = new() { x = 26.pt, y = 7.pt } }, OnClick = () => OnConfirm?.Invoke(false) },
                             }
                         },
                     }
@@ -258,6 +260,8 @@ internal class TrainingView : ReactiveComponent
                             {
                                 new BsTextButton { Text = "Start mode", FlexItem = { Size = new() { x = 22.pt, y = 5.pt } },
                                                    sInteractable = Busy.Map(b => !b), OnClick = () => OnRequestStartChange?.Invoke() },
+                                new BsTextButton { Text = "Reset skips", FlexItem = { Size = new() { x = 24.pt, y = 5.pt } },
+                                                   sInteractable = Busy.Map(b => !b), OnClick = () => OnRequestResetSkips?.Invoke() },
                                 new BsTextButton { Text = "Explore", FlexItem = { Size = new() { x = 22.pt, y = 5.pt } },
                                                    sInteractable = Busy.Map(b => !b), OnClick = () => OnOpenExplore?.Invoke() },
                                 new BsTextButton { Text = "Achievements", FlexItem = { Size = new() { x = 26.pt, y = 5.pt } },

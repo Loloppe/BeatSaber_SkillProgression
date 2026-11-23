@@ -87,7 +87,9 @@ namespace SkillProgression.Core.Progression
         /// <summary>Highest accuracy a new-map target asks for (same cap as Explore's expected accuracy).</summary>
         public const double MaxTargetAccuracy = 0.9995;
 
-        public static PathProgress? Analyze(string path, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog)
+        /// <param name="skipped">Maps the player skipped: replaced by the next best ones, kept only as a last resort.</param>
+        public static PathProgress? Analyze(string path, IReadOnlyList<RatedPlay> bestPlays, ModelFile model, MapCatalog catalog,
+            ISet<MapKey>? skipped = null)
         {
             var pathModel = model.Paths.FirstOrDefault(p => p.Destination == path);
             var state = PathState.Compute(path, bestPlays, model.Thresholds, model.AccSaber);
@@ -172,7 +174,7 @@ namespace SkillProgression.Core.Progression
                     TargetAccuracy = peers.Target(path, x.map)
                                      ?? Math.Min(MaxTargetAccuracy, estimator.Expected(x.map, x.map.Ratings[""], path) + accuracyStep),
                     PeerPopularity = x.map.PeerPopularity.TryGetValue(popularityKey, out var n) ? n : 0,
-                }), centre), catalog);
+                }), centre), catalog, skipped);
 
             IEnumerable<MapRecommendation> OrderNew(IEnumerable<MapRecommendation> maps, double centre) => gain != null
                 ? maps.OrderByDescending(r => gain(r.AxisRating, r.TargetAccuracy)).ThenByDescending(r => r.PeerPopularity)
@@ -218,7 +220,7 @@ namespace SkillProgression.Core.Progression
                     })
                     // D-058: furthest below players at their level first.
                     .Where(r => r.CurrentAccuracy < r.TargetAccuracy)
-                    .OrderBy(r => r.CurrentAccuracy - r.TargetAccuracy), catalog),
+                    .OrderBy(r => r.CurrentAccuracy - r.TargetAccuracy), catalog, skipped),
             };
 
             // A dimension where the player is already at/above the next waypoint is not an objective.
@@ -253,7 +255,7 @@ namespace SkillProgression.Core.Progression
         /// <param name="startLevel">Fresh start (D-040): calibrated or cautious level from the old profile, instead of the
         /// first waypoint's difficulty.</param>
         public static Objective? Starter(string path, ModelFile model, MapCatalog catalog, IReadOnlyCollection<MapKey> played,
-            double? startLevel = null)
+            double? startLevel = null, ISet<MapKey>? skipped = null)
         {
             var pathModel = model.Paths.FirstOrDefault(p => p.Destination == path);
             if (pathModel == null || pathModel.Waypoints.Count == 0) return null;
@@ -278,7 +280,7 @@ namespace SkillProgression.Core.Progression
             return new Objective
             {
                 Kind = ObjectiveKind.Push, Gap = 0, Priority = 0, CurrentValue = floor, TargetValue = easier, MapCentre = easier,
-                Maps = Diversify(maps, catalog),
+                Maps = Diversify(maps, catalog, skipped),
             };
         }
 
@@ -332,6 +334,21 @@ namespace SkillProgression.Core.Progression
                 Accuracy = Math.Min(1, Math.Max(last.Accuracy, state.Accuracy) + stepA),
                 EquivalentRank = 1,
             };
+        }
+
+        /// <summary>
+        /// Skipped maps (D-029, user 2026-11-22: skipping every map emptied Next up) give their place to the next best
+        /// ones; they only fill the list when there aren't enough others, and Next up shows them last.
+        /// </summary>
+        private static List<MapRecommendation> Diversify(IEnumerable<MapRecommendation> ordered, MapCatalog catalog,
+            ISet<MapKey>? skipped)
+        {
+            if (skipped == null || skipped.Count == 0) return Diversify(ordered, catalog);
+            var list = ordered.ToList();
+            var result = Diversify(list.Where(r => !skipped.Contains(r.Map)), catalog);
+            if (result.Count < MapsPerObjective)
+                result.AddRange(Diversify(list.Where(r => skipped.Contains(r.Map)), catalog).Take(MapsPerObjective - result.Count));
+            return result;
         }
 
         private static List<MapRecommendation> Diversify(IEnumerable<MapRecommendation> ordered, MapCatalog catalog)

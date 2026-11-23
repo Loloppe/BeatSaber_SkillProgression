@@ -42,7 +42,8 @@ internal class TrainingViewController : ViewController
     private TrainingView? _view;
     private TrainingSnapshot? _snapshot;
     private string? _playerId;
-    private StartMode _pendingStartMode;
+    /// <summary>What "Confirm" on the confirmation screen does.</summary>
+    private Action? _pendingConfirm;
     private bool _synced;
 
     /// <summary>
@@ -64,7 +65,8 @@ internal class TrainingViewController : ViewController
                 OnToSolo = row => Play(row, toSolo: true),
                 OnSkip = Skip,
                 OnRequestStartChange = RequestStartChange,
-                OnConfirmStartChange = ConfirmStartChange,
+                OnRequestResetSkips = RequestResetSkips,
+                OnConfirm = Confirm,
                 OnOpenExplore = () => ExploreRequested?.Invoke(),
                 OnOpenAchievements = () => AchievementsRequested?.Invoke(),
             };
@@ -203,16 +205,43 @@ internal class TrainingViewController : ViewController
     private void RequestStartChange()
     {
         if (_view == null) return;
-        _pendingStartMode = _service.State.StartMode == StartMode.Fresh ? StartMode.ImportBeatLeader : StartMode.Fresh;
-        _view.ConfirmText.Value = _pendingStartMode == StartMode.Fresh
+        var mode = _service.State.StartMode == StartMode.Fresh ? StartMode.ImportBeatLeader : StartMode.Fresh;
+        _view.ConfirmText.Value = mode == StartMode.Fresh
             ? "Start fresh from now? Your score history (BeatLeader, ScoreSaber, AccSaber) will be ignored."
             : "Import your scores? Your full history (BeatLeader, ScoreSaber, AccSaber) will be used again.";
-        _view.Screen.Value = TrainingScreen.ConfirmStartChange;
+        _pendingConfirm = () => ChooseStart(mode);
+        _view.Screen.Value = TrainingScreen.Confirm;
     }
 
-    private void ConfirmStartChange(bool confirmed)
+    private void RequestResetSkips()
     {
-        if (confirmed) ChooseStart(_pendingStartMode);
+        if (_view == null) return;
+        var count = _service.SkippedCount;
+        if (count == 0)
+        {
+            _view.Status.Value = "You haven't skipped any maps.";
+            return;
+        }
+        _view.ConfirmText.Value = count == 1
+            ? "Bring back the map you skipped? It can be recommended again like any other map."
+            : $"Bring back the {count} maps you skipped? They can be recommended again like any other map.";
+        _pendingConfirm = ResetSkips;
+        _view.Screen.Value = TrainingScreen.Confirm;
+    }
+
+    private async void ResetSkips()
+    {
+        _service.ResetSkips();
+        try { await RefreshAsync(sync: false); }
+        catch (Exception e) { Plugin.Log.Error(e); }
+        if (_view != null && _snapshot?.NextUp.Count > 0) _view.Status.Value = "Skipped maps can be recommended again.";
+    }
+
+    private void Confirm(bool confirmed)
+    {
+        var action = _pendingConfirm;
+        _pendingConfirm = null;
+        if (confirmed && action != null) action();
         else if (_snapshot != null) Show(_snapshot);
     }
 

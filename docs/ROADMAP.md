@@ -165,3 +165,10 @@ Outstanding / known gaps:
 - 2026-11-22 (cont.): Stale-PB bias in peer targets measured and tested (D-065): player level now from the last 12
   months of their PBs (fallback all), best of 4 variants on 432k held-out PBs (−5% error, a third less bias, no more
   impossible targets). 170 + 35 tests, anchors 11/11, check-peers OK, plugin copied (release zip not updated).
+- 2026-11-22 (cont.): Bug fix (D-066): skipping every Next up map emptied the list (player report, Accuracy). Skipped
+  maps now give their place to the next best ones and only come back, last, when nothing else is left. 172 + 35 tests,
+  anchors 11/11. Plus a "Reset skips" button with confirmation (D-067). Plugin copied.
+  **Awaiting in-game test** (skip several maps in a row: new ones appear; skip everything: skipped maps return at the
+  end; Reset skips: confirmation, then skipped maps back in place; bottom row of 4 buttons fits).
+  Test zip in data/release updated (Release build of the current working tree: D-064–D-067; model of 2026-11-22 11:53
+  with the incremental update), previous one kept as .2026-11-22-1107.zip.
