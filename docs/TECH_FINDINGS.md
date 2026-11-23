@@ -3,7 +3,7 @@
 ## Game / mod environment (1.40.8 instance)
 Unity 2022.3.33f1; Mono .NET 4.x profile (net472/net48 or netstandard2.0 assemblies load).
 BSIPA 4.3.6, SiraUtil 3.2.1, BSML 1.12.5, SongCore 3.15.3, SongDetailsCache 1.4.0, BeatSaverSharp 3.4.5,
-BeatSaberPlaylistsLib 1.7.2, PlaylistManager 1.7.3, BeatLeader 0.10.666, ScoreSaber 3.3.17, Newtonsoft 13.0.x.
+BeatSaberPlaylistsLib 1.7.2, PlaylistManager 1.7.3, BeatLeader 0.10.666, ScoreSaber 3.4.2 (was 3.3.17 until 2026-11-22), Newtonsoft 13.0.x.
 BeatMods API v3: `https://beatmods.com/api/v3/mods?gameName=beatsaber&gameVersion=1.40.8&status=verified`.
 
 ## Reactive Platform
@@ -79,6 +79,14 @@ v2research\`.
 - **BeatLeader only records if `RecorderUtils.shouldRecord`** (set by its patches on the level-select play button)
   → before each start invoke `BeatLeader.Utils.RecorderUtils.OnActionButtonWasPressed` via reflection
   (BeatSaberPlus does this). ScoreSaber submits Solo starts without extra work.
+- **ScoreSaber sign-in (2026-11-22):** ScoreSaber 3.3.17 signs in only when its leaderboard view activates (level select
+  or multiplayer). A plugin start without visiting Solo first → `ScoreSaberUploadData.Create` NullReferenceException
+  (null `LocalPlayerInfo`) and the score is not submitted. Fixed upstream: 3.4.x (`pc-mod` rewrite, installed 3.4.2)
+  authenticates inside the upload (`ScoreSubmissionWorkflow.EnsureScoreUploadSession`), so we do nothing.
+  `PlayerService` no longer exists in 3.4.x — never call ScoreSaber internals for this.
+- AudioTimeSyncController "audio should be playing" (vanilla log, ~5 frames, songTime 0) on the first start from our
+  flow, not on restarts; the song plays normally. Likely the audio clip isn't preloaded (we skip the level preview).
+  Not confirmed against a Solo start yet.
 - Hiding: presenting our FlowCoordinator with null side screens hides the main menu, BSML mods panel, BL noticeboard.
   Third-party FloatingScreens are not covered (opt-in hiding, fragile). Settings-triggered game restart drops our flow.
 - Download: BeatSaver CDN zip → CustomLevels → `SongCore.Loader.Instance.RefreshSongs(false)` → wait for event →

@@ -225,6 +225,10 @@ internal class ExploreViewController : ViewController
     {
         if (_view == null) return;
         _view.Busy.Value = false;
+        // Never played (user, 2026-11-22): a clear is a score now, whatever the accuracy, so the map leaves the list
+        // (same rule as the evidence: passes outside practice).
+        if (_view.Mode.Value == ExploreMode.NewMaps && record != null && record.IsPass() && !record.Practice)
+            _items = _items.Where(i => !i.Map.Equals(item.Map)).ToList();
         RefreshRows();
         _view.Status.Value = Format.ExploreResult(item, record);
     }
